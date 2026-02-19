@@ -43,8 +43,3 @@ __init__.py → file.py → _reader.py → h5py
 - `tests/fixtures/` — 8 sample .ptir files from the C# SDK test project
 - `docs/` — Markdown documentation
 - `examples/` — Runnable example scripts
-
-## Reference Sources
-
-- PTIR5 format spec: `C:\Users\andrew\Downloads\SE-PTIR File Format-180226-225854.pdf`
-- C# SDK: `C:\Users\andrew\source\repos\AGENT2-ptir-studio\src\pc\modules\ptir.file.api\PSC.PTIR5.SDK\`
