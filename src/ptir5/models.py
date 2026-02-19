@@ -313,31 +313,21 @@ _TYPE_TO_CLASS: dict[str, type[Measurement]] = {
     "PTSRSImageStack": PTSRSImageStack,
 }
 
-# Shape fallback class dispatch based on ndim and dtype
-_SHAPE_TO_BASE: dict[DataShape, type[Measurement]] = {
-    DataShape.FLOAT_SPECTRUM_1D: FloatSpectrum1D,
-    DataShape.FLOAT_IMAGE_2D: FloatImage2D,
-    DataShape.BYTE_IMAGE_2D: ByteImage2D,
-    DataShape.FLOAT_HYPERCUBE_3D: FloatHypercube3D,
-    DataShape.BYTE_IMAGE_STACK_3D: ByteImageStack3D,
-}
-
-
-def _infer_shape(ndim: int, dtype: np.dtype[Any]) -> DataShape:
+def _infer_shape(ndim: int, dtype: np.dtype[Any]) -> DataShape | None:
     """Infer DataShape from dataset rank and dtype for unknown types."""
     is_float = np.issubdtype(dtype, np.floating)
+    is_int = np.issubdtype(dtype, np.integer)
     if ndim == 1 and is_float:
         return DataShape.FLOAT_SPECTRUM_1D
     if ndim == 2 and is_float:
         return DataShape.FLOAT_IMAGE_2D
-    if ndim == 3 and not is_float:
+    if ndim == 3 and is_int:
         return DataShape.BYTE_IMAGE_2D
     if ndim == 3 and is_float:
         return DataShape.FLOAT_HYPERCUBE_3D
-    if ndim == 4 and not is_float:
+    if ndim == 4 and is_int:
         return DataShape.BYTE_IMAGE_STACK_3D
-    # Default fallback
-    return DataShape.FLOAT_SPECTRUM_1D
+    return None
 
 
 def build_measurement(
@@ -356,15 +346,16 @@ def build_measurement(
         mt = MeasurementType(type_str)
         shape = TYPE_TO_SHAPE[mt]
     else:
-        # Unknown type — infer from dataset
+        # Unknown type — keep base Measurement and infer shape if possible.
+        cls = Measurement
         data_path = f"{hdf5_path}/DATA"
         if reader.has_dataset(data_path):
             ds_shape = reader.dataset_shape(data_path)
             ds_dtype = reader.dataset_dtype(data_path)
-            shape = _infer_shape(len(ds_shape), ds_dtype)
+            inferred_shape = _infer_shape(len(ds_shape), ds_dtype)
+            shape = inferred_shape or DataShape.FLOAT_SPECTRUM_1D
         else:
             shape = DataShape.FLOAT_SPECTRUM_1D
-        cls = _SHAPE_TO_BASE.get(shape, Measurement)
         mt = type_str  # type: ignore[assignment]
 
     # Build GENERATED children

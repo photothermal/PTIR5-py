@@ -10,6 +10,13 @@ software (v5.0+).
 pip install ptir5
 ```
 
+For local development and testing:
+
+```bash
+pip install -e .[dev]
+pytest -q
+```
+
 ## Quick Start
 
 ```python

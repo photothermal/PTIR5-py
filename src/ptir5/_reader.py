@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import h5py  # type: ignore[import-untyped]
 
+from ptir5.exceptions import FileClosedError
 from ptir5.metadata import MetadataView, _convert_value
 
 if TYPE_CHECKING:
@@ -38,7 +39,7 @@ class HDF5Reader:
 
     def _file(self) -> h5py.File:
         if self._h5 is None:
-            raise RuntimeError("File is closed")
+            raise FileClosedError("PTIR5 file is closed")
         return self._h5
 
     # -- Group access -------------------------------------------------------

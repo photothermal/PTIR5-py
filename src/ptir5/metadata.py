@@ -8,6 +8,14 @@ from typing import Any
 import numpy as np
 
 
+def _convert_sequence(value: object) -> object:
+    if isinstance(value, list):
+        return [_convert_sequence(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_convert_sequence(item) for item in value)
+    return _convert_value(value)
+
+
 def _convert_value(val: Any) -> Any:
     """Convert an HDF5 attribute value to a Python-native type."""
     if isinstance(val, bytes):
@@ -15,13 +23,13 @@ def _convert_value(val: Any) -> Any:
     if isinstance(val, np.bytes_):
         return bytes(val).decode("utf-8")
     if isinstance(val, np.generic):
-        return val.item()
+        return _convert_value(val.item())
     if isinstance(val, np.ndarray):
         if val.ndim == 0:
-            return val.item()
+            return _convert_value(val.item())
         if val.shape == (1,):
-            return val[0].item()
-        return val.tolist()
+            return _convert_value(val[0])
+        return _convert_sequence(val.tolist())
     return val
 
 
