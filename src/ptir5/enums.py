@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import enum
+import sys
 from enum import Enum, IntEnum
 
-if hasattr(enum, "StrEnum"):
-    StrEnum = enum.StrEnum
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
 else:
     class StrEnum(str, Enum):
         """Python 3.10-compatible substitute for enum.StrEnum."""
