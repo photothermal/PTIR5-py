@@ -6,18 +6,16 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import h5py  # type: ignore[import-untyped]
+import numpy as np
 
-from ptir5.exceptions import FileClosedError
+from ptir5.exceptions import FileClosedError, InvalidMeasurementError
 from ptir5.metadata import MetadataView, _convert_value
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import numpy as np
-
 
 _KNOWN_SUBGROUPS = frozenset({"Channel", "ParticleData", "ROIData", "Palette"})
-_NON_ATTR_ITEMS = frozenset({"DATA", "GENERATED", "NODES"})
 
 
 class HDF5Reader:
@@ -58,7 +56,10 @@ class HDF5Reader:
         """Read the TYPE attribute from a group."""
         raw = self._file()[path].attrs["TYPE"]
         val = _convert_value(raw)
-        assert isinstance(val, str)
+        if not isinstance(val, str):
+            raise InvalidMeasurementError(
+                f"Expected str for TYPE attribute, got {type(val).__name__} at {path}"
+            )
         return val
 
     def read_label(self, path: str) -> str:
@@ -67,7 +68,10 @@ class HDF5Reader:
         if "Label" not in grp.attrs:
             return ""
         val = _convert_value(grp.attrs["Label"])
-        assert isinstance(val, str)
+        if not isinstance(val, str):
+            raise InvalidMeasurementError(
+                f"Expected str for Label attribute, got {type(val).__name__} at {path}"
+            )
         return val
 
     def build_metadata_view(self, path: str) -> MetadataView:
@@ -93,23 +97,33 @@ class HDF5Reader:
 
     # -- Dataset reading ----------------------------------------------------
 
+    def _get_dataset(self, path: str) -> h5py.Dataset:
+        """Return the h5py.Dataset at *path*, raising on type mismatch."""
+        ds = self._file()[path]
+        if not isinstance(ds, h5py.Dataset):
+            raise InvalidMeasurementError(
+                f"Expected Dataset, got {type(ds).__name__} at {path}"
+            )
+        return ds
+
     def read_dataset(self, path: str) -> np.ndarray[Any, Any]:
         """Read an entire dataset as a numpy array."""
-        ds = self._file()[path]
-        assert isinstance(ds, h5py.Dataset)
-        result: Any = ds[()]
+        result: Any = self._get_dataset(path)[()]
+        return result  # type: ignore[no-any-return]
+
+    def read_dataset_slice(
+        self, path: str, slices: tuple[int | slice, ...]
+    ) -> np.ndarray[Any, Any]:
+        """Read a slice of a dataset without loading the full array."""
+        result: Any = self._get_dataset(path)[slices]
         return result  # type: ignore[no-any-return]
 
     def dataset_shape(self, path: str) -> tuple[int, ...]:
-        ds = self._file()[path]
-        assert isinstance(ds, h5py.Dataset)
-        shape: Any = ds.shape
+        shape: Any = self._get_dataset(path).shape
         return shape  # type: ignore[no-any-return]
 
     def dataset_dtype(self, path: str) -> np.dtype[Any]:
-        ds = self._file()[path]
-        assert isinstance(ds, h5py.Dataset)
-        dtype: Any = ds.dtype
+        dtype: Any = self._get_dataset(path).dtype
         return dtype  # type: ignore[no-any-return]
 
     def has_dataset(self, path: str) -> bool:
@@ -144,7 +158,15 @@ class HDF5Reader:
         if not self.has_dataset(nodes_path):
             return []
         data = self.read_dataset(nodes_path)
-        # Shape: (N, 16) uint8 — each row is a UUID in bytes_le format
+        # Validate shape: (N, 16) uint8
+        if data.ndim != 2 or data.shape[1] != 16:
+            raise InvalidMeasurementError(
+                f"Expected NODES shape (N, 16), got {data.shape} at {nodes_path}"
+            )
+        if data.dtype != np.dtype("uint8"):
+            raise InvalidMeasurementError(
+                f"Expected NODES dtype uint8, got {data.dtype} at {nodes_path}"
+            )
         result: list[str] = []
         for i in range(data.shape[0]):
             raw_bytes = bytes(data[i])

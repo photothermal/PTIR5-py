@@ -1,5 +1,9 @@
 # ptir5
 
+[![CI](https://github.com/photothermal/PTIR5-py/actions/workflows/python-app.yml/badge.svg)](https://github.com/photothermal/PTIR5-py/actions/workflows/python-app.yml)
+[![PyPI version](https://img.shields.io/pypi/v/ptir5)](https://pypi.org/project/ptir5/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 Read-only Python library for PTIR5 files — the HDF5-based native format of
 [Photothermal Spectroscopy Corp.'s](https://www.photothermal.com/) PTIR Studio
 software (v5.0+).
@@ -36,7 +40,8 @@ with ptir5.open("sample.ptir") as f:
     if f.tree:
         for node, folders, leaves in f.tree.walk():
             for leaf in leaves:
-                print(leaf.name, leaf.measurement.data.shape)
+                if leaf.measurement is not None:
+                    print(leaf.name, leaf.measurement.data.shape)
 ```
 
 ## Features

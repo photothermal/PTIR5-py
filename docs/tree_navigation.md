@@ -26,23 +26,23 @@ The `tree` property provides PTIR Studio's document tree:
 with ptir5.open("sample.ptir") as f:
     if f.tree is None:
         print("No tree in this file")
-        return
+    else:
+        # Direct children
+        for child in f.tree.children:
+            if isinstance(child, ptir5.TreeFolder):
+                print(f"Folder: {child.name}")
+            elif isinstance(child, ptir5.TreeLeaf):
+                if child.measurement is not None:
+                    print(f"Leaf: {child.name} -> {child.measurement.measurement_type}")
 
-    # Direct children
-    for child in f.tree.children:
-        if isinstance(child, ptir5.TreeFolder):
-            print(f"Folder: {child.name}")
-        elif isinstance(child, ptir5.TreeLeaf):
-            print(f"Leaf: {child.name} -> {child.measurement.measurement_type}")
-
-    # Walk the whole tree (like os.walk)
-    for node, folders, leaves in f.tree.walk():
-        name = getattr(node, "name", "ROOT")
-        indent = "  "
-        for folder in folders:
-            print(f"{indent}{name}/{folder.name}/")
-        for leaf in leaves:
-            print(f"{indent}{name}/{leaf.name}")
+        # Walk the whole tree (like os.walk)
+        for node, folders, leaves in f.tree.walk():
+            name = getattr(node, "name", "ROOT")
+            indent = "  "
+            for folder in folders:
+                print(f"{indent}{name}/{folder.name}/")
+            for leaf in leaves:
+                print(f"{indent}{name}/{leaf.name}")
 ```
 
 ## Tree Structure
