@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from enum import Enum, IntEnum, StrEnum
+import enum
+from enum import Enum, IntEnum
+
+if hasattr(enum, "StrEnum"):
+    StrEnum = enum.StrEnum
+else:
+    class StrEnum(str, Enum):
+        """Python 3.10-compatible substitute for enum.StrEnum."""
+
+        def __str__(self) -> str:
+            return str(self.value)
 
 
 class MeasurementType(StrEnum):
