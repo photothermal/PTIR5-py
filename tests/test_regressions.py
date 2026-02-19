@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
 import pytest
 
 import ptir5
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_minimal_file(path: Path) -> None:
