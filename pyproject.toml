@@ -36,8 +36,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/psc-ptir/PTIR5-py"
-Repository = "https://github.com/psc-ptir/PTIR5-py"
+Homepage = "https://github.com/photothermal/PTIR5-py.git"
+Repository = "https://github.com/photothermal/PTIR5-py.git"
 
 [tool.hatch.version]
 path = "src/ptir5/_version.py"

@@ -39,7 +39,7 @@ Run all three quality gates (`pytest`, `ruff`, `mypy`) before opening a PR.
 
 ## Commit & Pull Request Guidelines
 
-- Recent history uses short imperative summaries, sometimes with prefixes (for example: `ci: ...`, `Fix ...`, `Add ...`).
+- Use [Conventional Commits](https://www.conventionalcommits.org/) prefixes (for example: `feat: ...`, `fix: ...`, `docs: ...`, `ci: ...`).
 - Keep commits focused and atomic; separate refactors from behavior changes.
 - PRs should include:
 - A clear summary and motivation.
