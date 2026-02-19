@@ -212,11 +212,15 @@ class FloatHypercube3D(Measurement):
 
     def read_spectrum(self, x: int, y: int) -> np.ndarray[Any, Any]:
         """Extract spectrum at pixel (x, y). Returns shape (num_points,)."""
-        return self.data[:, y, x]
+        return self._reader.read_dataset_slice(
+            f"{self._hdf5_path}/DATA", (slice(None), y, x)
+        )
 
     def read_image(self, index: int) -> np.ndarray[Any, Any]:
         """Extract image at spectral index. Returns shape (height, width)."""
-        return self.data[index, :, :]
+        return self._reader.read_dataset_slice(
+            f"{self._hdf5_path}/DATA", (index, slice(None), slice(None))
+        )
 
 
 class ByteImageStack3D(Measurement):
@@ -256,7 +260,10 @@ class ByteImageStack3D(Measurement):
 
     def read_image(self, index: int) -> np.ndarray[Any, Any]:
         """Extract image at stack index. Returns shape (height, width, bpp)."""
-        return self.data[index, :, :, :]
+        return self._reader.read_dataset_slice(
+            f"{self._hdf5_path}/DATA",
+            (index, slice(None), slice(None), slice(None)),
+        )
 
 
 # ---------------------------------------------------------------------------
