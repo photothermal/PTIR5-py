@@ -8,7 +8,7 @@
 
 ```bash
 pip install -e ".[dev]"       # Install in dev mode
-python -m pytest tests/ -v    # Run all tests (69 tests)
+python -m pytest tests/ -v    # Run all tests (91 tests)
 python -m ruff check src/ tests/  # Lint
 python -m mypy src/ptir5/     # Type check (strict mode)
 ```

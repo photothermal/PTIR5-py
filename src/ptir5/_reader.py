@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 
 _KNOWN_SUBGROUPS = frozenset({"Channel", "ParticleData", "ROIData", "Palette"})
-_NON_ATTR_ITEMS = frozenset({"DATA", "GENERATED", "NODES"})
 
 
 class HDF5Reader:
