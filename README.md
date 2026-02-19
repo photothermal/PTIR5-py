@@ -36,7 +36,8 @@ with ptir5.open("sample.ptir") as f:
     if f.tree:
         for node, folders, leaves in f.tree.walk():
             for leaf in leaves:
-                print(leaf.name, leaf.measurement.data.shape)
+                if leaf.measurement is not None:
+                    print(leaf.name, leaf.measurement.data.shape)
 ```
 
 ## Features

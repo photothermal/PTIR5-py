@@ -61,5 +61,6 @@ with ptir5.open("sample.ptir") as f:
         for node, folders, leaves in f.tree.walk():
             name = getattr(node, "name", "ROOT")
             for leaf in leaves:
-                print(f"  {name}/{leaf.name}: {leaf.measurement.measurement_type}")
+                if leaf.measurement is not None:
+                    print(f"  {name}/{leaf.name}: {leaf.measurement.measurement_type}")
 ```
