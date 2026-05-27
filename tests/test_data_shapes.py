@@ -142,16 +142,28 @@ class TestFloatHypercube3D:
             assert data.dtype == np.float32
 
 
-class TestByteImageStack3D:
+class TestFLPTIRImageStackLegacy:
+    """Legacy rank-4 byte format — the on-disk shape is (N, H, W, 4) uint8,
+    but each 4-byte pixel is a float32 value, so the high-level API returns
+    float32 imagery."""
+
     def test_flptir_stack_shape(self, flptir_stack_path: Path) -> None:
         with ptir5.open(flptir_stack_path) as f:
             m = f.measurements[0]
-            assert isinstance(m, ptir5.ByteImageStack3D)
+            assert isinstance(m, ptir5.FLPTIRImageStack)
             assert m.data_shape == DataShape.BYTE_IMAGE_STACK_3D
+            assert m.is_legacy is True
+
+            # Raw on-disk dataset is rank-4 uint8.
             data = m.data
             assert data.ndim == 4
             assert data.dtype == np.uint8
             assert data.shape == (5, 256, 256, 4)
+
+            # Canonical float view is rank-3 float32.
+            floats = m.data_float32
+            assert floats.shape == (5, 256, 256)
+            assert floats.dtype == np.float32
 
     def test_flptir_stack_properties(self, flptir_stack_path: Path) -> None:
         with ptir5.open(flptir_stack_path) as f:
@@ -167,4 +179,6 @@ class TestByteImageStack3D:
             m = f.measurements[0]
             assert isinstance(m, ptir5.FLPTIRImageStack)
             img = m.read_image(0)
-            assert img.shape == (256, 256, 4)
+            assert img.shape == (256, 256)
+            assert img.dtype == np.float32
+            np.testing.assert_array_equal(img, m.data_float32[0])

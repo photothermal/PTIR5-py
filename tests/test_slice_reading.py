@@ -43,18 +43,21 @@ class TestSliceBasedReading:
             full = m.data
             np.testing.assert_array_equal(img, full[0, :, :])
 
-    def test_byte_stack_read_image_uses_slice(self, flptir_stack_path: Path) -> None:
-        """ByteImageStack3D.read_image should return correct data via slice read."""
+    def test_flptir_stack_read_image_uses_slice(self, flptir_stack_path: Path) -> None:
+        """FLPTIRImageStack.read_image returns canonical (H, W) float32 for both
+        rank-3 and rank-4 storage formats. For the legacy rank-4 fixture this
+        reinterprets the trailing 4-byte dim as float32."""
         with ptir5.open(flptir_stack_path) as f:
             m = f.measurements[0]
             assert isinstance(m, ptir5.FLPTIRImageStack)
+            assert m.is_legacy is True
 
             img = m.read_image(0)
-            assert img.shape == (256, 256, 4)
-            assert img.dtype == np.uint8
+            assert img.shape == (256, 256)
+            assert img.dtype == np.float32
 
-            full = m.data
-            np.testing.assert_array_equal(img, full[0, :, :, :])
+            # The slice path agrees with the full data_float32 read.
+            np.testing.assert_array_equal(img, m.data_float32[0])
 
     def test_slice_does_not_call_read_dataset(self, hyperspectra_path: Path) -> None:
         """Slice helpers should call read_dataset_slice, not read_dataset."""

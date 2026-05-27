@@ -34,6 +34,7 @@ class DataShape(Enum):
     BYTE_IMAGE_2D = "byte_image_2d"
     FLOAT_HYPERCUBE_3D = "float_hypercube_3d"
     BYTE_IMAGE_STACK_3D = "byte_image_stack_3d"
+    FLOAT_IMAGE_STACK_3D = "float_image_stack_3d"
 
 
 class PixelFormat(IntEnum):
@@ -84,6 +85,10 @@ TYPE_TO_SHAPE: dict[MeasurementType, DataShape] = {
     MeasurementType.RamanHyperspectra: DataShape.FLOAT_HYPERCUBE_3D,
     MeasurementType.OPTIRImageStack: DataShape.FLOAT_HYPERCUBE_3D,
     MeasurementType.CameraImageStack: DataShape.BYTE_IMAGE_STACK_3D,
-    MeasurementType.FLPTIRImageStack: DataShape.BYTE_IMAGE_STACK_3D,
+    # FLPTIRImageStack stores either rank-4 uint8 (legacy) or rank-3 float32
+    # (new format). The concrete DataShape is chosen at build time based on
+    # the dataset's actual rank — this default is used only when the dataset
+    # is missing or has an unexpected shape.
+    MeasurementType.FLPTIRImageStack: DataShape.FLOAT_IMAGE_STACK_3D,
     MeasurementType.PTSRSImageStack: DataShape.FLOAT_HYPERCUBE_3D,
 }
