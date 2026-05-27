@@ -79,6 +79,36 @@ class TestRank3FloatFormat:
             img2 = m.read_image(2)
             np.testing.assert_array_equal(img2, expected[2])
 
+    def test_rank3_validation_rejects_wrong_dtype_at_open(
+        self, tmp_path: Path
+    ) -> None:
+        """A rank-3 FLPTIRImageStack DATA dataset that isn't float32 is
+        malformed. Reject it at file-open time rather than letting it
+        through as a _FloatFLPTIRImageStack that would silently return
+        non-float data via the inherited FloatImageStack3D.read_image()."""
+        bogus = np.zeros((2, 3, 4), dtype=np.uint8)
+        _write_stack_file(tmp_path / "rank3_u8.ptir", bogus)
+
+        with (
+            ptir5.open(tmp_path / "rank3_u8.ptir") as f,
+            pytest.raises(ptir5.InvalidMeasurementError, match="float32"),
+        ):
+            _ = f.measurements
+
+    def test_rank3_validation_rejects_int_dtype_at_open(
+        self, tmp_path: Path
+    ) -> None:
+        """Same as above for an int32 rank-3 dataset, which would otherwise
+        pass any naïve 4-byte heuristic."""
+        bogus = np.zeros((2, 3, 4), dtype=np.int32)
+        _write_stack_file(tmp_path / "rank3_i32.ptir", bogus)
+
+        with (
+            ptir5.open(tmp_path / "rank3_i32.ptir") as f,
+            pytest.raises(ptir5.InvalidMeasurementError, match="float32"),
+        ):
+            _ = f.measurements
+
     def test_bytes_per_pixel_undefined_for_float_format(self, tmp_path: Path) -> None:
         """Rank-3 float stacks are FloatImageStack3D, not ByteImageStack3D, so
         ``bytes_per_pixel`` (a byte-storage concept) is not defined on them."""

@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `FLPTIRImageStack` now correctly reads both supported on-disk formats (legacy rank-4 uint8 and new rank-3 float32). Previously, rank-3 float files could not be opened, and rank-4 legacy files returned raw bytes (`(N, H, W, 4) uint8`) instead of the float32 imagery they actually encode. `read_image()` now returns canonical `(H, W) float32` regardless of storage format. The raw on-disk dataset remains available via the `data` property. Legacy stacks continue to satisfy `isinstance(m, ByteImageStack3D)`; rank-3 stacks satisfy `isinstance(m, FloatImageStack3D)`; both satisfy `isinstance(m, ImageStack3D)` and `isinstance(m, FLPTIRImageStack)`.
-- Malformed rank-4 FLPTIRImageStack DATA datasets (wrong dtype or trailing dim ≠ 4) now raise a typed `InvalidMeasurementError` instead of leaking a raw numpy `ValueError` or returning meaningless reinterpreted bytes.
+- Malformed FLPTIRImageStack DATA datasets now raise a typed `InvalidMeasurementError` at the earliest possible point rather than leaking raw numpy errors or returning meaningless data. Rank-4 datasets are validated as `uint8` with trailing dim 4 before bytes are reinterpreted as float32. Rank-3 datasets are validated as `float32` at file-open time so a non-float dataset can never reach the rank-3 read path.
 
 ### Removed
 - Unused `_NON_ATTR_ITEMS` constant

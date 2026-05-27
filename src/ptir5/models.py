@@ -413,18 +413,35 @@ class _LegacyFLPTIRImageStack(FLPTIRImageStack, ByteImageStack3D):
 
 class _FloatFLPTIRImageStack(FLPTIRImageStack, FloatImageStack3D):
     """Rank-3 float32 FLPTIRImageStack — the format newly allocated stacks
-    use. ``data``, ``data_float32``, and ``read_image`` all return float32."""
+    use. ``data``, ``data_float32``, and ``read_image`` all return float32.
+
+    ``build_measurement`` validates that the dataset is float32 before
+    constructing this class, so reads from a well-formed file are guaranteed
+    to return float32. The defensive dtype checks on the read methods catch
+    direct instantiation against a malformed dataset.
+    """
 
     is_legacy = False
+
+    def _check_float32_dtype(self, arr: np.ndarray[Any, Any]) -> None:
+        if arr.dtype != np.float32:
+            raise InvalidMeasurementError(
+                f"FLPTIRImageStack rank-3 DATA must be float32; got dtype "
+                f"{arr.dtype} at {self._hdf5_path}"
+            )
 
     @property
     def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
         result = self._reader.read_dataset(f"{self._hdf5_path}/DATA")
-        if result.ndim != 3 or result.dtype != np.float32:
-            raise InvalidMeasurementError(
-                f"FLPTIRImageStack rank-3 DATA must be float32; got shape "
-                f"{result.shape} dtype {result.dtype} at {self._hdf5_path}"
-            )
+        self._check_float32_dtype(result)
+        return result
+
+    def read_image(self, index: int) -> np.ndarray[Any, np.dtype[np.float32]]:
+        result = self._reader.read_dataset_slice(
+            f"{self._hdf5_path}/DATA",
+            (index, slice(None), slice(None)),
+        )
+        self._check_float32_dtype(result)
         return result
 
 
@@ -482,18 +499,27 @@ def build_measurement(
     cls: type[Measurement]
     if type_str == "FLPTIRImageStack":
         # FLPTIRImageStack has two on-disk formats — pick the concrete class
-        # and matching DataShape from the actual dataset rank.
+        # and matching DataShape from the actual dataset rank/dtype, and
+        # reject anything that doesn't match one of the two valid layouts.
         mt = MeasurementType.FLPTIRImageStack
         data_path = f"{hdf5_path}/DATA"
-        ds_rank = (
-            len(reader.dataset_shape(data_path))
-            if reader.has_dataset(data_path)
-            else 0
-        )
+        if not reader.has_dataset(data_path):
+            raise InvalidMeasurementError(
+                f"FLPTIRImageStack is missing DATA dataset at {hdf5_path}"
+            )
+        ds_rank = len(reader.dataset_shape(data_path))
+        ds_dtype = reader.dataset_dtype(data_path)
         if ds_rank == 4:
+            # Full legacy-layout validation (uint8 + trailing dim 4) happens
+            # on first byte->float reinterpret in _reinterpret_legacy_flptir_bytes.
             cls = _LegacyFLPTIRImageStack
             shape = DataShape.BYTE_IMAGE_STACK_3D
         elif ds_rank == 3:
+            if ds_dtype != np.float32:
+                raise InvalidMeasurementError(
+                    f"FLPTIRImageStack rank-3 DATA must be float32; got dtype "
+                    f"{ds_dtype} at {hdf5_path}"
+                )
             cls = _FloatFLPTIRImageStack
             shape = DataShape.FLOAT_IMAGE_STACK_3D
         else:
