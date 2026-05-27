@@ -74,7 +74,14 @@ with ptir5.open("sample.ptir") as f:
 | O-PTIR Image Stack | `OPTIRImageStack` | `(images, height, width)` | float32 |
 | PTSRS Image Stack | `PTSRSImageStack` | `(images, height, width)` | float32 |
 | Camera Image Stack | `CameraImageStack` | `(images, height, width, bpp)` | uint8 |
-| FL-PTIR Image Stack | `FLPTIRImageStack` | `(images, height, width, bpp)` | uint8 |
+| FL-PTIR Image Stack (legacy) | `FLPTIRImageStack` | `(images, height, width, 4)` ¹ | uint8 |
+| FL-PTIR Image Stack | `FLPTIRImageStack` | `(images, height, width)` | float32 |
+
+¹ Legacy rank-4 storage encodes one `float32` per pixel as four `uint8` bytes.
+Use `m.read_image(i)` or `m.data_float32` to get canonical `float32` imagery
+for either storage format; `m.data` returns the raw on-disk dataset. See
+[`docs/data_types.md`](docs/data_types.md#flptirimagestack--dual-format) for
+details.
 
 ## Requirements
 

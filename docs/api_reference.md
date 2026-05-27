@@ -101,20 +101,66 @@ Inherits from `Measurement`. 3D float cube `(points, height, width)`.
 | `read_spectrum(x, y)` | `np.ndarray` | Spectrum at pixel (x, y) |
 | `read_image(index)` | `np.ndarray` | Image at spectral index |
 
-## ByteImageStack3D
+## ImageStack3D
 
-Inherits from `Measurement`. Byte image stack `(images, height, width, bpp)`.
+Inherits from `Measurement`. Abstract base for a stack of 2D images (axis 0 is
+frame index, not spectral). Concrete subclasses are `ByteImageStack3D` and
+`FloatImageStack3D`; the `read_image` return shape/dtype is defined on each
+subclass.
 
-| Property / Method | Type | Description |
+| Property | Type | Description |
 |----------|------|-------------|
 | `num_images` | `int` | Number of images |
 | `pixel_width` | `int` | Width in pixels |
 | `pixel_height` | `int` | Height in pixels |
-| `bytes_per_pixel` | `int` | Bytes per pixel |
 | `pixel_format` | `PixelFormat \| str` | Pixel format enum |
 | `image_width_um` | `float` | Physical width in microns |
 | `image_height_um` | `float` | Physical height in microns |
-| `read_image(index)` | `np.ndarray` | Image at stack index |
+
+## ByteImageStack3D
+
+Inherits from `ImageStack3D`. Byte image stack `(images, height, width, bpp)` of
+`uint8`.
+
+| Property / Method | Type | Description |
+|----------|------|-------------|
+| `bytes_per_pixel` | `int` | Bytes per pixel |
+| `read_image(index)` | `np.ndarray` | Image at stack index, shape `(height, width, bpp)` `uint8` |
+
+## FloatImageStack3D
+
+Inherits from `ImageStack3D`. Float image stack `(images, height, width)` of
+`float32`.
+
+| Property / Method | Type | Description |
+|----------|------|-------------|
+| `read_image(index)` | `np.ndarray` | Image at stack index, shape `(height, width)` `float32` |
+
+## FLPTIRImageStack
+
+Marker mixin for widefield FL-PTIR image stacks. `FLPTIRImageStack` itself is
+not a `Measurement` subclass; instances are returned by `ptir5.open(...)` as
+one of two concrete classes chosen by storage format:
+
+- Legacy rank-4 `(N, H, W, 4) uint8` storage → also `ByteImageStack3D`. Each
+  4-byte pixel encodes one `float32` value.
+- Rank-3 `(N, H, W) float32` storage → also `FloatImageStack3D`. Used by newly
+  allocated stacks.
+
+Both inherit `FLPTIRImageStack` and `ImageStack3D`, so callers can dispatch on
+storage shape (`ByteImageStack3D` / `FloatImageStack3D`), the abstract stack
+contract (`ImageStack3D`), or the measurement type (`FLPTIRImageStack`).
+
+The library validates the on-disk layout when opening a file and raises
+`InvalidMeasurementError` if the dataset is malformed (rank ∉ {3, 4}, rank-4
+with wrong dtype or trailing dim, or rank-3 that isn't `float32`).
+
+| Property / Method | Type | Description |
+|----------|------|-------------|
+| `is_legacy` | `bool` | `True` for rank-4 uint8 storage, `False` for rank-3 float32 |
+| `data_float32` | `np.ndarray` | Full stack as `(num_images, height, width)` `float32` for either format |
+| `read_image(index)` | `np.ndarray` | Frame at stack index as `(height, width)` `float32` for either format |
+| `data` | `np.ndarray` | Unmodified on-disk dataset — `uint8` for legacy, `float32` for rank-3 |
 
 ## MetadataView
 
@@ -164,7 +210,8 @@ Attributes from sub-groups (Channel, ParticleData, ROIData, Palette) are prefixe
 
 ### DataShape (Enum)
 
-`FLOAT_SPECTRUM_1D`, `FLOAT_IMAGE_2D`, `BYTE_IMAGE_2D`, `FLOAT_HYPERCUBE_3D`, `BYTE_IMAGE_STACK_3D`
+`FLOAT_SPECTRUM_1D`, `FLOAT_IMAGE_2D`, `BYTE_IMAGE_2D`, `FLOAT_HYPERCUBE_3D`,
+`BYTE_IMAGE_STACK_3D`, `FLOAT_IMAGE_STACK_3D`
 
 ### PixelFormat (IntEnum)
 

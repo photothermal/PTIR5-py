@@ -11,3 +11,4 @@ Photothermal Spectroscopy Corp.'s PTIR Studio software (v5.0+).
 - [File Format](file_format.md) — PTIR5 HDF5 format documentation
 - [Tree Navigation](tree_navigation.md) — Hierarchical vs flat access
 - [Examples](examples.md) — Annotated code examples
+- [Roadmap](roadmap.md) — Forward-looking ideas

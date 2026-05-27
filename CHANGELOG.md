@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Unused `_NON_ATTR_ITEMS` constant
 
+### Documentation
+- Documented the `FLPTIRImageStack` dual-format storage (legacy rank-4 uint8 vs. rank-3 float32), the canonical `data_float32` / `read_image()` float32 contract, and the new `ImageStack3D` / `FloatImageStack3D` base classes in `README.md`, `docs/data_types.md`, and `docs/api_reference.md`
+- Added `docs/roadmap.md` for forward-looking work (selective read APIs, CLI tool, ecosystem adapters)
+- Removed `docs/release_checklist.md` and `docs/public_release_readiness.md`. They were point-in-time pre-public-release planning artifacts; ongoing work belongs in `CHANGELOG.md` and the issue tracker, roadmap items in `docs/roadmap.md`
+- Updated stale test count in `CLAUDE.md`
+
 ## [0.1.0] - 2026-02-19
 
 ### Added
