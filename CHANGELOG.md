@@ -14,10 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md
 - GitHub issue and pull request templates
 - CI testing on Python 3.11, 3.12, and 3.13
+- `FloatImageStack3D` base class for rank-3 float image stacks
+- `FLPTIRImageStack.data_float32` and `FLPTIRImageStack.is_legacy` properties
 
 ### Changed
 - `FloatHypercube3D.read_spectrum()`, `FloatHypercube3D.read_image()`, and `ByteImageStack3D.read_image()` now use slice reads instead of loading full arrays
 - Runtime `assert` statements in `_reader.py` replaced with typed `InvalidMeasurementError` exceptions
+
+### Fixed
+- `FLPTIRImageStack` now correctly reads both supported on-disk formats (legacy rank-4 uint8 and new rank-3 float32). Previously, rank-3 float files could not be opened, and rank-4 legacy files returned raw bytes (`(N, H, W, 4) uint8`) instead of the float32 imagery they actually encode. `read_image()` now returns canonical `(H, W) float32` regardless of storage format. The raw on-disk dataset remains available via the `data` property.
 
 ### Removed
 - Unused `_NON_ATTR_ITEMS` constant

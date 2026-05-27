@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from ptir5.enums import TYPE_TO_SHAPE, DataShape, MeasurementType, PixelFormat
+from ptir5.exceptions import InvalidMeasurementError
 
 if TYPE_CHECKING:
     from ptir5._reader import HDF5Reader
@@ -266,6 +267,41 @@ class ByteImageStack3D(Measurement):
         )
 
 
+class FloatImageStack3D(Measurement):
+    """3D float image stack — shape (images, height, width), dtype float32.
+
+    Distinct from FloatHypercube3D semantically: this is a stack of 2D images
+    (no spectral axis), whereas FloatHypercube3D's first axis is wavelength.
+    """
+
+    @property
+    def num_images(self) -> int:
+        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[0]
+
+    @property
+    def pixel_height(self) -> int:
+        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[1]
+
+    @property
+    def pixel_width(self) -> int:
+        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[2]
+
+    @property
+    def image_width_um(self) -> float:
+        return float(self._metadata.get("ImageWidth", 0.0))
+
+    @property
+    def image_height_um(self) -> float:
+        return float(self._metadata.get("ImageHeight", 0.0))
+
+    def read_image(self, index: int) -> np.ndarray[Any, Any]:
+        """Extract image at stack index. Returns shape (height, width) float32."""
+        return self._reader.read_dataset_slice(
+            f"{self._hdf5_path}/DATA",
+            (index, slice(None), slice(None)),
+        )
+
+
 # ---------------------------------------------------------------------------
 # Concrete type classes (16 types)
 # ---------------------------------------------------------------------------
@@ -294,7 +330,118 @@ class PTSRSImageStack(FloatHypercube3D): ...
 
 # Byte image stacks (ByteImageStack3D)
 class CameraImageStack(ByteImageStack3D): ...
-class FLPTIRImageStack(ByteImageStack3D): ...
+
+
+class FLPTIRImageStack(Measurement):
+    """Widefield FLPTIR image stack.
+
+    Supports two on-disk formats (matching the C# PSC.PTIR5.SDK):
+
+    - **Legacy rank-4 byte format**: ``(num_images, height, width, 4)`` uint8.
+      Each 4-byte pixel is the byte representation of a float32 value (the
+      legacy storage was typed as bytes but always Gray32Float in practice).
+      ``is_legacy`` is ``True``.
+    - **Rank-3 float format**: ``(num_images, height, width)`` float32. Newly
+      allocated stacks use this layout. ``is_legacy`` is ``False``.
+
+    Regardless of the underlying format, :meth:`read_image` and
+    :attr:`data_float32` return float32 arrays of shape
+    ``(height, width)`` and ``(num_images, height, width)`` respectively, so
+    callers can ignore the storage format. The raw bytes are available via
+    :attr:`data` for legacy files (kept for backwards compatibility).
+    """
+
+    @property
+    def is_legacy(self) -> bool:
+        """True when the underlying dataset is the rank-4 byte format."""
+        return self._reader.dataset_dtype(f"{self._hdf5_path}/DATA").kind == "u"
+
+    @property
+    def num_images(self) -> int:
+        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[0]
+
+    @property
+    def pixel_height(self) -> int:
+        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[1]
+
+    @property
+    def pixel_width(self) -> int:
+        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[2]
+
+    @property
+    def image_width_um(self) -> float:
+        return float(self._metadata.get("ImageWidth", 0.0))
+
+    @property
+    def image_height_um(self) -> float:
+        return float(self._metadata.get("ImageHeight", 0.0))
+
+    @property
+    def pixel_format(self) -> PixelFormat | str:
+        raw: Any = self._metadata.get("PixelFormat", "")
+        try:
+            return PixelFormat[raw]
+        except KeyError:
+            return str(raw)
+
+    @property
+    def bytes_per_pixel(self) -> int:
+        """Trailing dim of the legacy dataset (always 4 for legacy float32 bytes).
+
+        Raises AttributeError on rank-3 float stacks where this concept does
+        not apply.
+        """
+        shape = self._reader.dataset_shape(f"{self._hdf5_path}/DATA")
+        if len(shape) != 4:
+            raise AttributeError(
+                "bytes_per_pixel is only defined for legacy rank-4 FLPTIR stacks"
+            )
+        return shape[3]
+
+    @property
+    def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
+        """The full stack as ``(num_images, height, width)`` float32.
+
+        For rank-3 float storage this is the dataset as written. For legacy
+        rank-4 byte storage the trailing 4-byte dimension is reinterpreted as
+        a single float32 pixel (matches the C# ``BytesToFloats`` conversion).
+        """
+        raw = self._reader.read_dataset(f"{self._hdf5_path}/DATA")
+        if raw.ndim == 3 and raw.dtype == np.float32:
+            return raw
+        if raw.ndim == 4 and raw.dtype == np.uint8 and raw.shape[3] == 4:
+            # Reinterpret the contiguous trailing 4 bytes as one float32.
+            return np.ascontiguousarray(raw).view(np.float32).reshape(raw.shape[:3])
+        raise InvalidMeasurementError(
+            f"FLPTIRImageStack DATA must be rank-3 float32 or rank-4 uint8 with "
+            f"trailing dim 4; got shape {raw.shape} dtype {raw.dtype}"
+        )
+
+    def read_image(self, index: int) -> np.ndarray[Any, np.dtype[np.float32]]:
+        """Extract image at stack index as ``(height, width)`` float32.
+
+        Works on both legacy rank-4 byte and new rank-3 float storage.
+        """
+        shape = self._reader.dataset_shape(f"{self._hdf5_path}/DATA")
+        if len(shape) == 3:
+            result = self._reader.read_dataset_slice(
+                f"{self._hdf5_path}/DATA",
+                (index, slice(None), slice(None)),
+            )
+            return result
+        if len(shape) == 4:
+            raw_bytes = self._reader.read_dataset_slice(
+                f"{self._hdf5_path}/DATA",
+                (index, slice(None), slice(None), slice(None)),
+            )
+            return (
+                np.ascontiguousarray(raw_bytes)
+                .view(np.float32)
+                .reshape(raw_bytes.shape[:2])
+            )
+        raise InvalidMeasurementError(
+            f"FLPTIRImageStack DATA has unexpected rank {len(shape)}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +499,15 @@ def build_measurement(
         cls = _TYPE_TO_CLASS[type_str]
         mt = MeasurementType(type_str)
         shape = TYPE_TO_SHAPE[mt]
+        # FLPTIRImageStack has two on-disk shapes — pick by actual dataset rank.
+        if mt is MeasurementType.FLPTIRImageStack:
+            data_path = f"{hdf5_path}/DATA"
+            if reader.has_dataset(data_path):
+                ds_rank = len(reader.dataset_shape(data_path))
+                if ds_rank == 4:
+                    shape = DataShape.BYTE_IMAGE_STACK_3D
+                elif ds_rank == 3:
+                    shape = DataShape.FLOAT_IMAGE_STACK_3D
     else:
         # Unknown type — keep base Measurement and infer shape if possible.
         cls = Measurement
