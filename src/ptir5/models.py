@@ -6,7 +6,14 @@ Hierarchy:
     ├── FloatImage2D       — 2D float images (OPTIR, Generated, PTSRS)
     ├── ByteImage2D        — 2D byte images (Camera, Fluorescence, FLPTIR)
     ├── FloatHypercube3D   — 3D float cubes (Hyperspectra, OPTIRImageStack)
-    └── ByteImageStack3D   — 3D byte stacks (CameraImageStack, FLPTIRImageStack)
+    └── ImageStack3D       — abstract base for stacks of 2D images
+        ├── ByteImageStack3D   — rank-4 uint8 (CameraImageStack, legacy FLPTIRImageStack)
+        └── FloatImageStack3D  — rank-3 float32 (rank-3 FLPTIRImageStack)
+
+The ``FLPTIRImageStack`` mixin marks both legacy and rank-3 concrete classes,
+so callers can dispatch on either the storage shape (``ByteImageStack3D`` /
+``FloatImageStack3D``), the abstract stack contract (``ImageStack3D``), or the
+measurement type (``FLPTIRImageStack``).
 
 Each base shape has concrete subclasses for each MeasurementType.
 """
@@ -224,8 +231,17 @@ class FloatHypercube3D(Measurement):
         )
 
 
-class ByteImageStack3D(Measurement):
-    """3D byte image stack — shape (images, height, width, bpp), dtype uint8."""
+class ImageStack3D(Measurement):
+    """Abstract base for a stack of 2D images.
+
+    Concrete subclasses are :class:`ByteImageStack3D` (rank-4 uint8 storage)
+    and :class:`FloatImageStack3D` (rank-3 float32 storage). Distinct from
+    :class:`FloatHypercube3D`, whose first axis is spectral rather than a
+    frame index.
+
+    The :meth:`read_image` return type and shape differ between subclasses;
+    use the concrete-class API when shape/dtype matter.
+    """
 
     @property
     def num_images(self) -> int:
@@ -238,10 +254,6 @@ class ByteImageStack3D(Measurement):
     @property
     def pixel_width(self) -> int:
         return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[2]
-
-    @property
-    def bytes_per_pixel(self) -> int:
-        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[3]
 
     @property
     def pixel_format(self) -> PixelFormat | str:
@@ -259,6 +271,14 @@ class ByteImageStack3D(Measurement):
     def image_height_um(self) -> float:
         return float(self._metadata.get("ImageHeight", 0.0))
 
+
+class ByteImageStack3D(ImageStack3D):
+    """3D byte image stack — shape (images, height, width, bpp), dtype uint8."""
+
+    @property
+    def bytes_per_pixel(self) -> int:
+        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[3]
+
     def read_image(self, index: int) -> np.ndarray[Any, Any]:
         """Extract image at stack index. Returns shape (height, width, bpp)."""
         return self._reader.read_dataset_slice(
@@ -267,39 +287,16 @@ class ByteImageStack3D(Measurement):
         )
 
 
-class FloatImageStack3D(Measurement):
-    """3D float image stack — shape (images, height, width), dtype float32.
+class FloatImageStack3D(ImageStack3D):
+    """3D float image stack — shape (images, height, width), dtype float32."""
 
-    Distinct from FloatHypercube3D semantically: this is a stack of 2D images
-    (no spectral axis), whereas FloatHypercube3D's first axis is wavelength.
-    """
-
-    @property
-    def num_images(self) -> int:
-        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[0]
-
-    @property
-    def pixel_height(self) -> int:
-        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[1]
-
-    @property
-    def pixel_width(self) -> int:
-        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[2]
-
-    @property
-    def image_width_um(self) -> float:
-        return float(self._metadata.get("ImageWidth", 0.0))
-
-    @property
-    def image_height_um(self) -> float:
-        return float(self._metadata.get("ImageHeight", 0.0))
-
-    def read_image(self, index: int) -> np.ndarray[Any, Any]:
+    def read_image(self, index: int) -> np.ndarray[Any, np.dtype[np.float32]]:
         """Extract image at stack index. Returns shape (height, width) float32."""
-        return self._reader.read_dataset_slice(
+        result = self._reader.read_dataset_slice(
             f"{self._hdf5_path}/DATA",
             (index, slice(None), slice(None)),
         )
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -332,116 +329,103 @@ class PTSRSImageStack(FloatHypercube3D): ...
 class CameraImageStack(ByteImageStack3D): ...
 
 
-class FLPTIRImageStack(Measurement):
-    """Widefield FLPTIR image stack.
+def _reinterpret_legacy_flptir_bytes(
+    raw: np.ndarray[Any, Any], hdf5_path: str
+) -> np.ndarray[Any, np.dtype[np.float32]]:
+    """Validate the legacy rank-4 layout and reinterpret bytes as float32.
 
-    Supports two on-disk formats (matching the C# PSC.PTIR5.SDK):
+    The legacy on-disk layout is ``(..., 4) uint8`` where each contiguous
+    4-byte tile is the byte representation of one float32 pixel. Any other
+    shape/dtype combination indicates a malformed file.
+    """
+    if raw.dtype != np.uint8 or raw.ndim < 1 or raw.shape[-1] != 4:
+        raise InvalidMeasurementError(
+            f"FLPTIRImageStack legacy DATA must be uint8 with trailing dim 4; "
+            f"got shape {raw.shape} dtype {raw.dtype} at {hdf5_path}"
+        )
+    return (
+        np.ascontiguousarray(raw).view(np.float32).reshape(raw.shape[:-1])
+    )
+
+
+class FLPTIRImageStack:
+    """Marker mixin for widefield FLPTIR image stacks.
+
+    FLPTIRImageStack has two on-disk formats (matching the C# PSC.PTIR5.SDK):
 
     - **Legacy rank-4 byte format**: ``(num_images, height, width, 4)`` uint8.
       Each 4-byte pixel is the byte representation of a float32 value (the
       legacy storage was typed as bytes but always Gray32Float in practice).
-      ``is_legacy`` is ``True``.
+      Represented by :class:`_LegacyFLPTIRImageStack`, which also inherits
+      from :class:`ByteImageStack3D`.
     - **Rank-3 float format**: ``(num_images, height, width)`` float32. Newly
-      allocated stacks use this layout. ``is_legacy`` is ``False``.
+      allocated stacks use this layout. Represented by
+      :class:`_FloatFLPTIRImageStack`, which also inherits from
+      :class:`FloatImageStack3D`.
+
+    Both concrete classes inherit from this mixin, so callers can use
+    ``isinstance(m, FLPTIRImageStack)`` to dispatch by measurement type
+    regardless of storage format. They can additionally use
+    ``isinstance(m, ByteImageStack3D)`` / ``isinstance(m, FloatImageStack3D)``
+    or the shared :class:`ImageStack3D` base to dispatch by storage shape.
 
     Regardless of the underlying format, :meth:`read_image` and
-    :attr:`data_float32` return float32 arrays of shape
-    ``(height, width)`` and ``(num_images, height, width)`` respectively, so
-    callers can ignore the storage format. The raw bytes are available via
-    :attr:`data` for legacy files (kept for backwards compatibility).
+    :attr:`data_float32` return float32 imagery so callers can ignore the
+    storage format. The raw on-disk dataset is always available via the
+    :attr:`data` property.
     """
 
-    @property
-    def is_legacy(self) -> bool:
-        """True when the underlying dataset is the rank-4 byte format."""
-        return self._reader.dataset_dtype(f"{self._hdf5_path}/DATA").kind == "u"
-
-    @property
-    def num_images(self) -> int:
-        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[0]
-
-    @property
-    def pixel_height(self) -> int:
-        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[1]
-
-    @property
-    def pixel_width(self) -> int:
-        return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[2]
-
-    @property
-    def image_width_um(self) -> float:
-        return float(self._metadata.get("ImageWidth", 0.0))
-
-    @property
-    def image_height_um(self) -> float:
-        return float(self._metadata.get("ImageHeight", 0.0))
-
-    @property
-    def pixel_format(self) -> PixelFormat | str:
-        raw: Any = self._metadata.get("PixelFormat", "")
-        try:
-            return PixelFormat[raw]
-        except KeyError:
-            return str(raw)
-
-    @property
-    def bytes_per_pixel(self) -> int:
-        """Trailing dim of the legacy dataset (always 4 for legacy float32 bytes).
-
-        Raises AttributeError on rank-3 float stacks where this concept does
-        not apply.
-        """
-        shape = self._reader.dataset_shape(f"{self._hdf5_path}/DATA")
-        if len(shape) != 4:
-            raise AttributeError(
-                "bytes_per_pixel is only defined for legacy rank-4 FLPTIR stacks"
-            )
-        return shape[3]
+    # Concrete subclasses populate ``is_legacy`` and ``data_float32``.
+    # ``read_image`` comes from the storage base (ByteImageStack3D for legacy,
+    # FloatImageStack3D for the rank-3 format); the legacy concrete class
+    # overrides it to reinterpret the bytes as float32.
+    is_legacy: bool
 
     @property
     def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
         """The full stack as ``(num_images, height, width)`` float32.
 
-        For rank-3 float storage this is the dataset as written. For legacy
-        rank-4 byte storage the trailing 4-byte dimension is reinterpreted as
-        a single float32 pixel (matches the C# ``BytesToFloats`` conversion).
+        Implementations: :class:`_LegacyFLPTIRImageStack` reinterprets the
+        rank-4 byte storage; :class:`_FloatFLPTIRImageStack` returns the
+        rank-3 dataset as written.
         """
+        raise NotImplementedError
+
+
+class _LegacyFLPTIRImageStack(FLPTIRImageStack, ByteImageStack3D):
+    """Legacy rank-4 uint8 FLPTIRImageStack. ``data`` returns raw bytes;
+    ``data_float32`` and ``read_image`` return canonical float32 imagery."""
+
+    is_legacy = True
+
+    @property
+    def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
         raw = self._reader.read_dataset(f"{self._hdf5_path}/DATA")
-        if raw.ndim == 3 and raw.dtype == np.float32:
-            return raw
-        if raw.ndim == 4 and raw.dtype == np.uint8 and raw.shape[3] == 4:
-            # Reinterpret the contiguous trailing 4 bytes as one float32.
-            return np.ascontiguousarray(raw).view(np.float32).reshape(raw.shape[:3])
-        raise InvalidMeasurementError(
-            f"FLPTIRImageStack DATA must be rank-3 float32 or rank-4 uint8 with "
-            f"trailing dim 4; got shape {raw.shape} dtype {raw.dtype}"
-        )
+        return _reinterpret_legacy_flptir_bytes(raw, self._hdf5_path)
 
     def read_image(self, index: int) -> np.ndarray[Any, np.dtype[np.float32]]:
-        """Extract image at stack index as ``(height, width)`` float32.
-
-        Works on both legacy rank-4 byte and new rank-3 float storage.
-        """
-        shape = self._reader.dataset_shape(f"{self._hdf5_path}/DATA")
-        if len(shape) == 3:
-            result = self._reader.read_dataset_slice(
-                f"{self._hdf5_path}/DATA",
-                (index, slice(None), slice(None)),
-            )
-            return result
-        if len(shape) == 4:
-            raw_bytes = self._reader.read_dataset_slice(
-                f"{self._hdf5_path}/DATA",
-                (index, slice(None), slice(None), slice(None)),
-            )
-            return (
-                np.ascontiguousarray(raw_bytes)
-                .view(np.float32)
-                .reshape(raw_bytes.shape[:2])
-            )
-        raise InvalidMeasurementError(
-            f"FLPTIRImageStack DATA has unexpected rank {len(shape)}"
+        raw = self._reader.read_dataset_slice(
+            f"{self._hdf5_path}/DATA",
+            (index, slice(None), slice(None), slice(None)),
         )
+        return _reinterpret_legacy_flptir_bytes(raw, self._hdf5_path)
+
+
+class _FloatFLPTIRImageStack(FLPTIRImageStack, FloatImageStack3D):
+    """Rank-3 float32 FLPTIRImageStack — the format newly allocated stacks
+    use. ``data``, ``data_float32``, and ``read_image`` all return float32."""
+
+    is_legacy = False
+
+    @property
+    def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
+        result = self._reader.read_dataset(f"{self._hdf5_path}/DATA")
+        if result.ndim != 3 or result.dtype != np.float32:
+            raise InvalidMeasurementError(
+                f"FLPTIRImageStack rank-3 DATA must be float32; got shape "
+                f"{result.shape} dtype {result.dtype} at {self._hdf5_path}"
+            )
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -463,7 +447,8 @@ _TYPE_TO_CLASS: dict[str, type[Measurement]] = {
     "RamanHyperspectra": RamanHyperspectra,
     "OPTIRImageStack": OPTIRImageStack,
     "CameraImageStack": CameraImageStack,
-    "FLPTIRImageStack": FLPTIRImageStack,
+    # FLPTIRImageStack is rank-dispatched in build_measurement, not via this
+    # table, because its concrete class depends on the on-disk dataset shape.
     "PTSRSImageStack": PTSRSImageStack,
 }
 
@@ -495,19 +480,31 @@ def build_measurement(
 
     # Determine class and shape
     cls: type[Measurement]
-    if type_str in _TYPE_TO_CLASS:
+    if type_str == "FLPTIRImageStack":
+        # FLPTIRImageStack has two on-disk formats — pick the concrete class
+        # and matching DataShape from the actual dataset rank.
+        mt = MeasurementType.FLPTIRImageStack
+        data_path = f"{hdf5_path}/DATA"
+        ds_rank = (
+            len(reader.dataset_shape(data_path))
+            if reader.has_dataset(data_path)
+            else 0
+        )
+        if ds_rank == 4:
+            cls = _LegacyFLPTIRImageStack
+            shape = DataShape.BYTE_IMAGE_STACK_3D
+        elif ds_rank == 3:
+            cls = _FloatFLPTIRImageStack
+            shape = DataShape.FLOAT_IMAGE_STACK_3D
+        else:
+            raise InvalidMeasurementError(
+                f"FLPTIRImageStack DATA must be rank 3 or 4; found rank "
+                f"{ds_rank} at {hdf5_path}"
+            )
+    elif type_str in _TYPE_TO_CLASS:
         cls = _TYPE_TO_CLASS[type_str]
         mt = MeasurementType(type_str)
         shape = TYPE_TO_SHAPE[mt]
-        # FLPTIRImageStack has two on-disk shapes — pick by actual dataset rank.
-        if mt is MeasurementType.FLPTIRImageStack:
-            data_path = f"{hdf5_path}/DATA"
-            if reader.has_dataset(data_path):
-                ds_rank = len(reader.dataset_shape(data_path))
-                if ds_rank == 4:
-                    shape = DataShape.BYTE_IMAGE_STACK_3D
-                elif ds_rank == 3:
-                    shape = DataShape.FLOAT_IMAGE_STACK_3D
     else:
         # Unknown type — keep base Measurement and infer shape if possible.
         cls = Measurement

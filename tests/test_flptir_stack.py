@@ -80,6 +80,8 @@ class TestRank3FloatFormat:
             np.testing.assert_array_equal(img2, expected[2])
 
     def test_bytes_per_pixel_undefined_for_float_format(self, tmp_path: Path) -> None:
+        """Rank-3 float stacks are FloatImageStack3D, not ByteImageStack3D, so
+        ``bytes_per_pixel`` (a byte-storage concept) is not defined on them."""
         _write_stack_file(
             tmp_path / "rank3.ptir",
             np.zeros((1, 2, 2), dtype=np.float32),
@@ -88,9 +90,11 @@ class TestRank3FloatFormat:
         with ptir5.open(tmp_path / "rank3.ptir") as f:
             m = f.measurements[0]
             assert isinstance(m, ptir5.FLPTIRImageStack)
+            assert isinstance(m, ptir5.FloatImageStack3D)
+            assert not isinstance(m, ptir5.ByteImageStack3D)
 
-            with pytest.raises(AttributeError, match="legacy"):
-                _ = m.bytes_per_pixel
+            with pytest.raises(AttributeError, match="bytes_per_pixel"):
+                _ = m.bytes_per_pixel  # type: ignore[attr-defined]
 
 
 class TestRank4LegacyByteFormat:
@@ -155,6 +159,55 @@ class TestRank4LegacyByteFormat:
 
             img1 = m.read_image(1)
             np.testing.assert_array_equal(img1, floats[1])
+
+    def test_legacy_isinstance_dispatch(self, tmp_path: Path) -> None:
+        """Legacy FLPTIR stacks satisfy both the storage-shape contract
+        (ByteImageStack3D, ImageStack3D) and the measurement-type contract
+        (FLPTIRImageStack)."""
+        floats = np.array([[[1.0, 2.0]]], dtype=np.float32)
+        as_bytes = floats.view(np.uint8).reshape(1, 1, 2, 4)
+        _write_stack_file(tmp_path / "rank4.ptir", as_bytes)
+
+        with ptir5.open(tmp_path / "rank4.ptir") as f:
+            m = f.measurements[0]
+            assert isinstance(m, ptir5.FLPTIRImageStack)
+            assert isinstance(m, ptir5.ByteImageStack3D)
+            assert isinstance(m, ptir5.ImageStack3D)
+            assert not isinstance(m, ptir5.FloatImageStack3D)
+
+    def test_rank4_validation_rejects_wrong_dtype(self, tmp_path: Path) -> None:
+        """A rank-4 FLPTIRImageStack DATA dataset with non-uint8 dtype is
+        malformed; reading via the float32 paths must raise
+        InvalidMeasurementError rather than silently producing garbage or
+        leaking a raw numpy ValueError."""
+        bogus = np.zeros((2, 3, 4, 4), dtype=np.int32)
+        _write_stack_file(tmp_path / "bad_dtype.ptir", bogus)
+
+        with ptir5.open(tmp_path / "bad_dtype.ptir") as f:
+            m = f.measurements[0]
+            assert isinstance(m, ptir5.FLPTIRImageStack)
+            assert isinstance(m, ptir5.ByteImageStack3D)
+
+            with pytest.raises(ptir5.InvalidMeasurementError, match="uint8"):
+                _ = m.data_float32
+
+            with pytest.raises(ptir5.InvalidMeasurementError, match="uint8"):
+                _ = m.read_image(0)
+
+    def test_rank4_validation_rejects_wrong_trailing_dim(self, tmp_path: Path) -> None:
+        """Rank-4 uint8 with trailing dim != 4 is malformed."""
+        bogus = np.zeros((2, 3, 4, 2), dtype=np.uint8)
+        _write_stack_file(tmp_path / "bad_trailing.ptir", bogus)
+
+        with ptir5.open(tmp_path / "bad_trailing.ptir") as f:
+            m = f.measurements[0]
+            assert isinstance(m, ptir5.FLPTIRImageStack)
+
+            with pytest.raises(ptir5.InvalidMeasurementError, match="trailing dim 4"):
+                _ = m.data_float32
+
+            with pytest.raises(ptir5.InvalidMeasurementError, match="trailing dim 4"):
+                _ = m.read_image(0)
 
     def test_raw_data_still_accessible_as_bytes(self, tmp_path: Path) -> None:
         """The ``data`` property remains the unmodified on-disk dataset; this
