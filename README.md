@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/photothermal/PTIR5-py/actions/workflows/python-app.yml/badge.svg)](https://github.com/photothermal/PTIR5-py/actions/workflows/python-app.yml)
 [![PyPI version](https://img.shields.io/pypi/v/ptir5)](https://pypi.org/project/ptir5/)
+[![conda-forge version](https://img.shields.io/conda/vn/conda-forge/ptir5)](https://anaconda.org/conda-forge/ptir5)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 Read-only Python library for PTIR5 files — the HDF5-based native format of
@@ -10,8 +11,16 @@ software (v5.0+).
 
 ## Installation
 
+From PyPI:
+
 ```bash
 pip install ptir5
+```
+
+From conda-forge:
+
+```bash
+conda install -c conda-forge ptir5
 ```
 
 For local development and testing:
