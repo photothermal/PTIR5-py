@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-12
+
 ### Added
 - Slice-based dataset reading (`read_dataset_slice`) to avoid loading full arrays for helper methods
 - Validation for TREE/NODES data (shape and dtype checks)
@@ -17,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ImageStack3D` abstract base for 2D image stacks (parent of `ByteImageStack3D` and `FloatImageStack3D`)
 - `FloatImageStack3D` base class for rank-3 float image stacks
 - `FLPTIRImageStack.data_float32` and `FLPTIRImageStack.is_legacy` properties
+- conda-forge packaging recipe under `packaging/conda-forge/`
+- conda-forge installation instructions and badge in README
 
 ### Changed
 - `FloatHypercube3D.read_spectrum()`, `FloatHypercube3D.read_image()`, and `ByteImageStack3D.read_image()` now use slice reads instead of loading full arrays
