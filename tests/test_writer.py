@@ -107,6 +107,49 @@ def test_result_round_trip_preserves_source_and_recomputes_caches(
         np.testing.assert_array_equal(group["ComponentCompletion"], [1, 1])
 
 
+def test_inexact_float32_increment_is_accepted(source: Path, tmp_path: Path) -> None:
+    """Wavenumbers rounded to float32 must still match a regular float64 axis."""
+    with h5py.File(source, "r+") as file:
+        stack = file[f"MEASUREMENTS/{GUID}"]
+        stack.attrs["XIncrement"] = np.array([0.1], dtype=np.float32)
+        wavenumbers = np.float32(1000) + np.arange(4, dtype=np.float32) * np.float32(0.1)
+        del stack["Wavenumber"]
+        stack.create_dataset("Wavenumber", data=wavenumbers)
+    output = tmp_path / "result.ptir"
+    guid = write(source, output)
+    with ptir5.open(source) as raw, ptir5.open(output) as saved:
+        expected = raw.get_measurement(GUID).x_values[1:3]  # type: ignore[attr-defined]
+        np.testing.assert_allclose(
+            saved.get_measurement(guid).x_values,  # type: ignore[attr-defined]
+            expected,
+            rtol=0,
+            atol=1e-3,
+        )
+
+
+def test_rebased_xstart_keeps_source_precision_without_wavenumber(
+    source: Path, tmp_path: Path
+) -> None:
+    """A float64 XStart with an inexact increment must not be coarsened to float32."""
+    with h5py.File(source, "r+") as file:
+        stack = file[f"MEASUREMENTS/{GUID}"]
+        stack.attrs["XStart"] = np.array([1000.123456789], dtype=np.float64)
+        stack.attrs["XIncrement"] = np.array([0.1], dtype=np.float64)
+        del stack["Wavenumber"]
+    output = tmp_path / "result.ptir"
+    guid = write(source, output)
+    with ptir5.open(source) as raw, ptir5.open(output) as saved:
+        expected = raw.get_measurement(GUID).x_values[1:3]  # type: ignore[attr-defined]
+        np.testing.assert_allclose(
+            saved.get_measurement(guid).x_values,  # type: ignore[attr-defined]
+            expected,
+            rtol=0,
+            atol=1e-9,
+        )
+    with h5py.File(output, "r") as file:
+        assert file[f"MEASUREMENTS/{guid}"].attrs["XStart"].dtype == np.float64
+
+
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])
 def test_invalid_data_creates_no_output(source: Path, tmp_path: Path, failure: str) -> None:
     data = np.ones((2, 2, 3), dtype=np.float32)

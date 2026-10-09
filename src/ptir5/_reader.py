@@ -231,7 +231,10 @@ def append_stack_result(
             expected = float(_convert_value(source.attrs["XStart"])) + np.arange(
                 frame_start, stop
             ) * float(_convert_value(source.attrs["XIncrement"]))
-            if not np.array_equal(actual, expected):
+            # Stored wavenumbers are rounded to the dataset dtype, so compare at that precision.
+            eps = np.finfo(actual.dtype).eps if actual.dtype.kind == "f" else 0.0
+            tolerance = 4 * eps * max(float(np.max(np.abs(expected), initial=0.0)), 1.0)
+            if not np.allclose(actual, expected, rtol=0.0, atol=tolerance):
                 raise ValueError("Per-frame wavenumbers do not match the regular source axis")
         tree = document.require_group("TREE")
         if "NODES" in tree:
@@ -274,12 +277,16 @@ def append_stack_result(
                 del result.attrs[name]
         result.attrs["PaletteAutoRange"] = np.array([1], dtype=np.uint8)
         result.attrs["PaletteAutoRangeToStack"] = np.array([1], dtype=np.uint8)
+        # Keep the source attribute's precision so the rebased axis is not coarsened.
+        x_start_dtype = np.asarray(source.attrs["XStart"]).dtype
+        if x_start_dtype.kind != "f":
+            x_start_dtype = np.dtype(np.float64)
         result.attrs["XStart"] = np.array(
             [
                 float(_convert_value(source.attrs["XStart"]))
                 + frame_start * float(_convert_value(source.attrs["XIncrement"]))
             ],
-            dtype=np.float32,
+            dtype=x_start_dtype,
         )
         # Assigning replaces fixed-length source strings instead of truncating them.
         result.attrs["Label"] = np.bytes_(label.encode("utf-8"))

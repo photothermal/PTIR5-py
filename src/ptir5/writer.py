@@ -125,7 +125,11 @@ def write_image_stack_result(
             if not isinstance(result, OPTIRImageStack):
                 raise ValueError("Saved result has an unexpected measurement type")
             np.testing.assert_array_equal(result.data, cube)
-            np.testing.assert_array_equal(result.x_values, coordinates)
+            # XStart/XIncrement are stored attributes, so allow float32 rounding of the axis.
+            axis_scale = max(float(np.max(np.abs(coordinates))), 1.0)
+            axis_tolerance = 4 * np.finfo(np.float32).eps * axis_scale
+            if not np.allclose(result.x_values, coordinates, rtol=0.0, atol=axis_tolerance):
+                raise ValueError("Saved result axis does not match the source frames")
             if saved.tree is None or not any(
                 leaf.guid == new_guid for _, _, leaves in saved.tree.walk() for leaf in leaves
             ):
