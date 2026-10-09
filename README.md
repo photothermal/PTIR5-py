@@ -5,7 +5,7 @@
 [![conda-forge version](https://img.shields.io/conda/vn/conda-forge/ptir5)](https://anaconda.org/conda-forge/ptir5)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-Read-only Python library for PTIR5 files — the HDF5-based native format of
+Python library for PTIR5 files — the HDF5-based native format of
 [Photothermal Spectroscopy Corp.'s](https://www.photothermal.com/) PTIR Studio
 software (v5.0+).
 
@@ -56,6 +56,7 @@ with ptir5.open("sample.ptir") as f:
 ## Features
 
 - **Read-only access** to all PTIR5 measurement types as numpy arrays
+- **Derived O-PTIR stack output** to a new document, preserving all source measurements
 - **16 measurement types**: O-PTIR spectra/images/hyperspectra, Raman spectra/hyperspectra, camera images, fluorescence images, FL-PTIR images, PTSRS spectra/images, and image stacks
 - **Hierarchical tree navigation** matching PTIR Studio's document structure
 - **Flat measurement enumeration** with type filtering and GUID lookup
@@ -91,6 +92,16 @@ Use `m.read_image(i)` or `m.data_float32` to get canonical `float32` imagery
 for either storage format; `m.data` returns the raw on-disk dataset. See
 [`docs/data_types.md`](docs/data_types.md#flptirimagestack--dual-format) for
 details.
+
+## Derived output
+
+`ptir5.open()` remains read-only. The separate `write_image_stack_result()` API
+copies a source document and appends a labelled derived O-PTIR image stack with a
+new GUID and document-tree entry. It accepts finite float32 values covering a
+contiguous frame range and the full source image area. Source acquisition metadata
+is retained as context; generated children are cleared and extrema recalculated.
+
+See [derived output](docs/derived_output.md) for usage, validation and restrictions.
 
 ## Requirements
 

@@ -1,4 +1,4 @@
-"""ptir5 — Read-only Python library for PTIR5 files."""
+"""ptir5 — Read-only access and non-destructive derived image-stack output."""
 
 from __future__ import annotations
 
@@ -41,6 +41,7 @@ from ptir5.models import (
     RamanSpectrum,
 )
 from ptir5.tree import TreeFolder, TreeLeaf, TreeRoot
+from ptir5.writer import write_image_stack_result
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,6 +62,7 @@ def open(path: str | Path) -> PTIR5File:
 __all__ = [
     "__version__",
     "open",
+    "write_image_stack_result",
     # File
     "PTIR5File",
     # Enums
