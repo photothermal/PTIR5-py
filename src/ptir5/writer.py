@@ -75,6 +75,8 @@ def write_image_stack_result(
     temporary = Path(temporary_name)
     try:
         shutil.copyfile(source_path, temporary)
+        # mkstemp creates 0600; the published result should be as accessible as its source.
+        shutil.copymode(source_path, temporary)
         source_hash = _sha256(temporary)
         if expected_source_sha256 is not None and source_hash != expected_source_sha256:
             raise ValueError("Source checksum does not match the expected acquisition")

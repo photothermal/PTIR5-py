@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import stat
+import sys
 import uuid
 from typing import TYPE_CHECKING
 
@@ -200,6 +202,29 @@ def test_metadata_group_with_nested_members_is_rejected(
         write(source, output)
     assert not output.exists()
     assert list(tmp_path.glob(".ptir5-result-*")) == []
+
+
+def test_result_mode_is_copied_from_source(
+    source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[Path, Path]] = []
+    real_copymode = shutil.copymode
+
+    def spy(src: Path, dst: Path) -> None:
+        calls.append((src, dst))
+        real_copymode(src, dst)
+
+    monkeypatch.setattr(writer.shutil, "copymode", spy)
+    write(source, tmp_path / "result.ptir")
+    assert [src for src, _ in calls] == [source.resolve()]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_result_permissions_match_source(source: Path, tmp_path: Path) -> None:
+    source.chmod(0o644)
+    output = tmp_path / "result.ptir"
+    write(source, output)
+    assert stat.S_IMODE(output.stat().st_mode) == 0o644
 
 
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])
