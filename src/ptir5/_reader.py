@@ -227,6 +227,10 @@ def append_stack_result(
             elif name in {"Channel", "Palette", "GENERATED"}:
                 if not isinstance(child, h5py.Group):
                     raise ValueError(f"Stack child must be a group: {name}")
+                # Channel/Palette carry attributes only; nested members could hold
+                # per-frame data that a copy would leave stale for a shorter result.
+                if name != "GENERATED" and len(child) != 0:
+                    raise ValueError(f"{name} must not contain nested members")
             else:
                 raise ValueError(f"Unsupported stack child for derived output: {name}")
         if "Wavenumber" in source:
