@@ -224,7 +224,10 @@ def append_stack_result(
             elif name in frame_names:
                 if not isinstance(child, h5py.Dataset) or child.shape != (frame_count,):
                     raise ValueError(f"Malformed per-frame metadata: {name}")
-            elif name not in {"Channel", "Palette", "GENERATED"}:
+            elif name in {"Channel", "Palette", "GENERATED"}:
+                if not isinstance(child, h5py.Group):
+                    raise ValueError(f"Stack child must be a group: {name}")
+            else:
                 raise ValueError(f"Unsupported stack child for derived output: {name}")
         if "Wavenumber" in source:
             actual = source["Wavenumber"][frame_start:stop]

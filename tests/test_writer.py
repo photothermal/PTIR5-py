@@ -171,6 +171,22 @@ def test_validation_runs_on_the_copied_snapshot(
     assert list(tmp_path.glob(".ptir5-result-*")) == []
 
 
+@pytest.mark.parametrize("name", ["Channel", "Palette", "GENERATED"])
+def test_known_subgroup_that_is_a_dataset_is_rejected(
+    source: Path, tmp_path: Path, name: str
+) -> None:
+    with h5py.File(source, "r+") as file:
+        stack = file[f"MEASUREMENTS/{GUID}"]
+        if name in stack:
+            del stack[name]
+        stack.create_dataset(name, data=np.zeros(2, dtype=np.float32))
+    output = tmp_path / "result.ptir"
+    with pytest.raises(ValueError, match="must be a group"):
+        write(source, output)
+    assert not output.exists()
+    assert list(tmp_path.glob(".ptir5-result-*")) == []
+
+
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])
 def test_invalid_data_creates_no_output(source: Path, tmp_path: Path, failure: str) -> None:
     data = np.ones((2, 2, 3), dtype=np.float32)
