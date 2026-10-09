@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import uuid
 from typing import TYPE_CHECKING
 
@@ -148,6 +149,26 @@ def test_rebased_xstart_keeps_source_precision_without_wavenumber(
         )
     with h5py.File(output, "r") as file:
         assert file[f"MEASUREMENTS/{guid}"].attrs["XStart"].dtype == np.float64
+
+
+def test_validation_runs_on_the_copied_snapshot(
+    source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A source swapped after the caller's call began must not be published unvalidated."""
+    real_copy = shutil.copyfile
+
+    def swapped_copy(src: Path, dst: Path) -> Path:
+        real_copy(src, dst)
+        with h5py.File(dst, "r+") as file:
+            file[f"MEASUREMENTS/{GUID}"].attrs["XUnits"] = np.bytes_(b"um")
+        return dst
+
+    monkeypatch.setattr(writer.shutil, "copyfile", swapped_copy)
+    output = tmp_path / "result.ptir"
+    with pytest.raises(ValueError, match="wavenumber axis"):
+        write(source, output)
+    assert not output.exists()
+    assert list(tmp_path.glob(".ptir5-result-*")) == []
 
 
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])

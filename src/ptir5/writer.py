@@ -64,43 +64,10 @@ def write_image_stack_result(
         raise ValueError("Result must be a nonempty rank-3 float32 array")
     if not np.isfinite(cube).all():
         raise ValueError("Derived result must contain only finite values")
-    with PTIR5File(source_path) as document:
-        measurement = document.get_measurement(measurement_guid)
-        if not isinstance(measurement, OPTIRImageStack):
-            raise ValueError("Only OPTIRImageStack derived output is supported")
-        if cube.shape[1:] != (measurement.pixel_height, measurement.pixel_width):
-            raise ValueError(
-                "Result must cover the full source spatial area; crops are unsupported"
-            )
-        stop = frame_start + cube.shape[0]
-        if stop > measurement.num_points:
-            raise ValueError("Result frame range exceeds the source stack")
-        metadata = measurement.metadata
-        if not all(key in metadata for key in ("XStart", "XIncrement", "XUnits")):
-            raise ValueError("Source requires explicit regular wavenumber-axis metadata")
-        if metadata["XUnits"] not in ("cm-1", "cm^-1", "cm⁻¹"):
-            raise ValueError("Source must have a wavenumber axis")
-        start, increment = float(metadata["XStart"]), float(metadata["XIncrement"])
-        if not np.isfinite([start, increment]).all() or increment == 0:
-            raise ValueError("Source requires finite, nonzero wavenumber-axis metadata")
-        coordinates = measurement.x_values[frame_start:stop]
-    new_guid = str(uuid4())
-    source_hash = _sha256(source_path)
-    if expected_source_sha256 is not None and source_hash != expected_source_sha256:
-        raise ValueError("Source checksum does not match the expected acquisition")
-    record = {
-        "schema_version": 1,
-        "source_sha256": source_hash,
-        "source_measurement_guid": measurement_guid,
-        "result_measurement_guid": new_guid,
-        "source_frame_range": [frame_start, stop],
-        "spatial_coverage": "full source image",
-        "acquisition_metadata_scope": "inherited source acquisition context",
-        "processing": dict(provenance),
-    }
-    record_text = json.dumps(record, ensure_ascii=False, allow_nan=False)
     # A same-directory temporary and exclusive hard link make completion atomic
     # without replacing an output created by another process during processing.
+    # The private copy is the snapshot: it is validated, hashed and extended, so a
+    # source replaced after this point cannot be published as a different acquisition.
     fd, temporary_name = tempfile.mkstemp(
         prefix=".ptir5-result-", suffix=".ptir", dir=output_path.parent
     )
@@ -108,8 +75,41 @@ def write_image_stack_result(
     temporary = Path(temporary_name)
     try:
         shutil.copyfile(source_path, temporary)
-        if _sha256(temporary) != source_hash:
-            raise ValueError("Source changed while copying; retry with a stable acquisition file")
+        source_hash = _sha256(temporary)
+        if expected_source_sha256 is not None and source_hash != expected_source_sha256:
+            raise ValueError("Source checksum does not match the expected acquisition")
+        with PTIR5File(temporary) as document:
+            measurement = document.get_measurement(measurement_guid)
+            if not isinstance(measurement, OPTIRImageStack):
+                raise ValueError("Only OPTIRImageStack derived output is supported")
+            if cube.shape[1:] != (measurement.pixel_height, measurement.pixel_width):
+                raise ValueError(
+                    "Result must cover the full source spatial area; crops are unsupported"
+                )
+            stop = frame_start + cube.shape[0]
+            if stop > measurement.num_points:
+                raise ValueError("Result frame range exceeds the source stack")
+            metadata = measurement.metadata
+            if not all(key in metadata for key in ("XStart", "XIncrement", "XUnits")):
+                raise ValueError("Source requires explicit regular wavenumber-axis metadata")
+            if metadata["XUnits"] not in ("cm-1", "cm^-1", "cm⁻¹"):
+                raise ValueError("Source must have a wavenumber axis")
+            start, increment = float(metadata["XStart"]), float(metadata["XIncrement"])
+            if not np.isfinite([start, increment]).all() or increment == 0:
+                raise ValueError("Source requires finite, nonzero wavenumber-axis metadata")
+            coordinates = measurement.x_values[frame_start:stop]
+        new_guid = str(uuid4())
+        record = {
+            "schema_version": 1,
+            "source_sha256": source_hash,
+            "source_measurement_guid": measurement_guid,
+            "result_measurement_guid": new_guid,
+            "source_frame_range": [frame_start, stop],
+            "spatial_coverage": "full source image",
+            "acquisition_metadata_scope": "inherited source acquisition context",
+            "processing": dict(provenance),
+        }
+        record_text = json.dumps(record, ensure_ascii=False, allow_nan=False)
         append_stack_result(
             temporary,
             measurement_guid,
