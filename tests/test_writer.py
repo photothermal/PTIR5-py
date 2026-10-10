@@ -388,6 +388,35 @@ def test_per_frame_dataset_attributes_are_preserved(source: Path, tmp_path: Path
         assert group["NumAverages"].attrs["Calibration"][0] == 2.5
 
 
+def test_overflowing_axis_coordinates_are_rejected(source: Path, tmp_path: Path) -> None:
+    with h5py.File(source, "r+") as file:
+        stack = file[f"MEASUREMENTS/{GUID}"]
+        stack.attrs["XStart"] = np.array([1e308], dtype=np.float64)
+        stack.attrs["XIncrement"] = np.array([1e308], dtype=np.float64)
+        del stack["Wavenumber"]
+    output = tmp_path / "result.ptir"
+    with pytest.raises(ValueError, match="must be finite"):
+        write(source, output)
+    assert not output.exists()
+    assert list(tmp_path.glob(".ptir5-result-*")) == []
+
+
+def test_rebased_start_overflowing_stored_precision_is_rejected(
+    source: Path, tmp_path: Path
+) -> None:
+    """Finite in float64 but infinite once stored in the attribute's float32."""
+    with h5py.File(source, "r+") as file:
+        stack = file[f"MEASUREMENTS/{GUID}"]
+        stack.attrs["XStart"] = np.array([3e38], dtype=np.float32)
+        stack.attrs["XIncrement"] = np.array([3e38], dtype=np.float32)
+        del stack["Wavenumber"]
+    output = tmp_path / "result.ptir"
+    with pytest.raises(ValueError, match="must be finite"):
+        write(source, output)
+    assert not output.exists()
+    assert list(tmp_path.glob(".ptir5-result-*")) == []
+
+
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])
 def test_invalid_data_creates_no_output(source: Path, tmp_path: Path, failure: str) -> None:
     data = np.ones((2, 2, 3), dtype=np.float32)

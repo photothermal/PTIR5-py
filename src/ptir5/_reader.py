@@ -316,13 +316,17 @@ def append_stack_result(
         x_start_dtype = np.asarray(source.attrs["XStart"]).dtype
         if x_start_dtype.kind != "f":
             x_start_dtype = np.dtype(np.float64)
-        result.attrs["XStart"] = np.array(
-            [
-                float(_convert_value(source.attrs["XStart"]))
-                + frame_start * float(_convert_value(source.attrs["XIncrement"]))
-            ],
-            dtype=x_start_dtype,
-        )
+        with np.errstate(over="ignore"):
+            rebased_start = np.array(
+                [
+                    float(_convert_value(source.attrs["XStart"]))
+                    + frame_start * float(_convert_value(source.attrs["XIncrement"]))
+                ],
+                dtype=x_start_dtype,
+            )
+        if not np.isfinite(rebased_start).all():
+            raise ValueError("Rebased XStart must be finite in the stored precision")
+        result.attrs["XStart"] = rebased_start
         # Assigning replaces fixed-length source strings instead of truncating them.
         result.attrs["Label"] = np.bytes_(label.encode("utf-8"))
         result.attrs["ProcessingProvenance"] = np.bytes_(provenance_json.encode("utf-8"))

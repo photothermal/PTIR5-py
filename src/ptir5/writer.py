@@ -102,7 +102,11 @@ def write_image_stack_result(
             start, increment = float(metadata["XStart"]), float(metadata["XIncrement"])
             if not np.isfinite([start, increment]).all() or increment == 0:
                 raise ValueError("Source requires finite, nonzero wavenumber-axis metadata")
-            coordinates = measurement.x_values[frame_start:stop]
+            # Finite start and increment can still overflow once combined.
+            with np.errstate(over="ignore", invalid="ignore"):
+                coordinates = measurement.x_values[frame_start:stop]
+            if not np.isfinite(coordinates).all():
+                raise ValueError("Computed wavenumber coordinates must be finite")
         new_guid = str(uuid4())
         record = {
             "schema_version": 1,
