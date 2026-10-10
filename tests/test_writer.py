@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 import stat
 import sys
 import uuid
@@ -157,15 +156,15 @@ def test_validation_runs_on_the_copied_snapshot(
     source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A source swapped after the caller's call began must not be published unvalidated."""
-    real_copy = shutil.copyfile
+    real_hash = writer._sha256
 
-    def swapped_copy(src: Path, dst: Path) -> Path:
-        real_copy(src, dst)
-        with h5py.File(dst, "r+") as file:
+    def altered_then_hashed(path: Path) -> str:
+        # The first thing done to the snapshot is hashing it; alter it just before.
+        with h5py.File(path, "r+") as file:
             file[f"MEASUREMENTS/{GUID}"].attrs["XUnits"] = np.bytes_(b"um")
-        return dst
+        return real_hash(path)
 
-    monkeypatch.setattr(writer.shutil, "copyfile", swapped_copy)
+    monkeypatch.setattr(writer, "_sha256", altered_then_hashed)
     output = tmp_path / "result.ptir"
     with pytest.raises(ValueError, match="wavenumber axis"):
         write(source, output)
@@ -204,19 +203,40 @@ def test_metadata_group_with_nested_members_is_rejected(
     assert list(tmp_path.glob(".ptir5-result-*")) == []
 
 
-def test_result_mode_is_copied_from_source(
+def test_result_mode_is_the_source_mode(
     source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    calls: list[tuple[Path, Path]] = []
-    real_copymode = shutil.copymode
+    calls: list[int] = []
+    real_chmod = writer.os.chmod
 
-    def spy(src: Path, dst: Path) -> None:
-        calls.append((src, dst))
-        real_copymode(src, dst)
+    def spy(path: Path, mode: int) -> None:
+        calls.append(mode)
+        real_chmod(path, mode)
 
-    monkeypatch.setattr(writer.shutil, "copymode", spy)
+    monkeypatch.setattr(writer.os, "chmod", spy)
+    expected = stat.S_IMODE(source.stat().st_mode)
     write(source, tmp_path / "result.ptir")
-    assert [src for src, _ in calls] == [source.resolve()]
+    assert calls == [expected]
+
+
+def test_mode_comes_from_the_snapshot_not_a_replaced_path(
+    source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Replacing the source path mid-write must not change the published permissions."""
+    expected = stat.S_IMODE(source.stat().st_mode)
+    real_hash = writer._sha256
+
+    def replaced_then_hashed(path: Path) -> str:
+        replacement = tmp_path / "replacement.ptir"
+        replacement.write_bytes(b"unrelated")
+        replacement.chmod(0o444)
+        replacement.replace(source)
+        return real_hash(path)
+
+    monkeypatch.setattr(writer, "_sha256", replaced_then_hashed)
+    output = tmp_path / "result.ptir"
+    write(source, output)
+    assert stat.S_IMODE(output.stat().st_mode) == expected
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
@@ -232,20 +252,20 @@ def test_mode_is_applied_after_the_temporary_is_built(
 ) -> None:
     """A read-only source mode must not reach the temporary before it is written."""
     events: list[str] = []
-    real_append, real_copymode = writer.append_stack_result, shutil.copymode
+    real_append, real_chmod = writer.append_stack_result, writer.os.chmod
 
     def append(*args: object) -> None:
         events.append("append")
         real_append(*args)  # type: ignore[arg-type]
 
-    def copymode(src: Path, dst: Path) -> None:
-        events.append("copymode")
-        real_copymode(src, dst)
+    def chmod(path: Path, mode: int) -> None:
+        events.append("chmod")
+        real_chmod(path, mode)
 
     monkeypatch.setattr(writer, "append_stack_result", append)
-    monkeypatch.setattr(writer.shutil, "copymode", copymode)
+    monkeypatch.setattr(writer.os, "chmod", chmod)
     write(source, tmp_path / "result.ptir")
-    assert events == ["append", "copymode"]
+    assert events == ["append", "chmod"]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
@@ -353,6 +373,19 @@ def test_tree_nodes_attributes_are_preserved(source: Path, tmp_path: Path) -> No
         assert attrs["IndexVersion"][0] == 3
         assert bytes(attrs["Note"]) == b"keep me"
         assert file["TREE/NODES"].shape == (2, 16)
+
+
+def test_per_frame_dataset_attributes_are_preserved(source: Path, tmp_path: Path) -> None:
+    with h5py.File(source, "r+") as file:
+        stack = file[f"MEASUREMENTS/{GUID}"]
+        stack["Wavenumber"].attrs["Units"] = np.bytes_(b"cm-1")
+        stack["NumAverages"].attrs["Calibration"] = np.array([2.5], dtype=np.float64)
+    output = tmp_path / "result.ptir"
+    guid = write(source, output)
+    with h5py.File(output, "r") as file:
+        group = file[f"MEASUREMENTS/{guid}"]
+        assert bytes(group["Wavenumber"].attrs["Units"]) == b"cm-1"
+        assert group["NumAverages"].attrs["Calibration"][0] == 2.5
 
 
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])

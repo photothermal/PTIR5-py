@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -74,7 +75,11 @@ def write_image_stack_result(
     os.close(fd)
     temporary = Path(temporary_name)
     try:
-        shutil.copyfile(source_path, temporary)
+        # Read mode and bytes from one open file so a path replaced afterwards cannot
+        # give the snapshot another file's permissions.
+        with source_path.open("rb") as stream, temporary.open("wb") as snapshot:
+            source_mode = stat.S_IMODE(os.fstat(stream.fileno()).st_mode)
+            shutil.copyfileobj(stream, snapshot)
         source_hash = _sha256(temporary)
         if expected_source_sha256 is not None and source_hash != expected_source_sha256:
             raise ValueError("Source checksum does not match the expected acquisition")
@@ -136,7 +141,7 @@ def write_image_stack_result(
                 raise ValueError("Saved result is missing its document-tree entry")
         # mkstemp creates 0600; match the source's mode only now, so a read-only source
         # cannot make the temporary unwritable while it is still being built.
-        shutil.copymode(source_path, temporary)
+        os.chmod(temporary, source_mode)
         os.link(temporary, output_path)
     finally:
         temporary.unlink(missing_ok=True)

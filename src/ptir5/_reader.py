@@ -290,7 +290,10 @@ def append_stack_result(
                 values = cube.min(axis=(1, 2)) if name == "MinValue" else cube.max(axis=(1, 2))
             elif name == "ComponentCompletion":
                 values = np.ones(cube.shape[0], dtype=np.uint8)
-            result.create_dataset(name, data=values, maxshape=(None,), chunks=True)
+            sliced = result.create_dataset(name, data=values, maxshape=(None,), chunks=True)
+            # Units, calibration and extension markers describe the whole dataset.
+            for attr_name, attr_value in source[name].attrs.items():
+                sliced.attrs[attr_name] = attr_value
         for name, values in (
             ("MinValue", cube.min(axis=(1, 2))),
             ("MaxValue", cube.max(axis=(1, 2))),
