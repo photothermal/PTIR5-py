@@ -178,10 +178,11 @@ class HDF5Reader:
 
 
 def _require_local_objects(root: h5py.Group) -> None:
-    """Reject any soft or external link anywhere in the document.
+    """Reject links and out-of-file dataset storage anywhere in the document.
 
     The copy is hashed and then published as a snapshot, so every retained object
-    must live inside it; a link would read or write another file or object.
+    and every dataset payload must live inside it; a soft or external link, an
+    externally stored dataset or a virtual dataset would read another file.
     """
     pending, seen = [root], {root.id}
     while pending:
@@ -191,6 +192,10 @@ def _require_local_objects(root: h5py.Group) -> None:
                 path = f"{group.name.rstrip('/')}/{name}"
                 raise ValueError(f"{path} must be a local object, not a link")
             child = group[name]
+            if isinstance(child, h5py.Dataset) and (child.is_virtual or child.external):
+                raise ValueError(
+                    f"{child.name} must store its data in the file, not externally or virtually"
+                )
             if isinstance(child, h5py.Group) and child.id not in seen:
                 seen.add(child.id)
                 pending.append(child)
@@ -325,8 +330,12 @@ def append_stack_result(
         leaf.attrs["TYPE"] = source.attrs["TYPE"]
         leaf.attrs["Label"] = np.bytes_(label.encode("utf-8"))
         new_row = np.frombuffer(uuid.UUID(result_guid).bytes_le, dtype=np.uint8).reshape(1, 16)
+        node_attrs = dict(tree["NODES"].attrs)
         del tree["NODES"]
-        tree.create_dataset(
+        replacement = tree.create_dataset(
             "NODES", data=np.concatenate([nodes, new_row]), maxshape=(None, 16), chunks=True
         )
+        # Recreating the dataset must not drop attributes attached to the tree index.
+        for attr_name, attr_value in node_attrs.items():
+            replacement.attrs[attr_name] = attr_value
         document.flush()

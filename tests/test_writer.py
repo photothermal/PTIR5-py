@@ -319,6 +319,42 @@ def test_hard_link_cycle_does_not_hang(source: Path, tmp_path: Path) -> None:
         write(source, tmp_path / "result.ptir")
 
 
+@pytest.mark.parametrize("kind", ["external", "virtual"])
+def test_dataset_with_out_of_file_storage_is_rejected(
+    source: Path, tmp_path: Path, kind: str
+) -> None:
+    """Payloads outside the .ptir are not covered by its checksum."""
+    path = f"MEASUREMENTS/{GUID}/NumAverages"
+    sidecar = tmp_path / "sidecar.bin"
+    sidecar.write_bytes(np.arange(4, dtype=np.int32).tobytes())
+    with h5py.File(source, "r+") as file:
+        del file[path]
+        if kind == "external":
+            file.create_dataset(path, shape=(4,), dtype=np.int32, external=[(sidecar.name, 0, 16)])
+        else:
+            layout = h5py.VirtualLayout(shape=(4,), dtype=np.int32)
+            layout[:] = h5py.VirtualSource(sidecar.name, "data", shape=(4,))
+            file.create_virtual_dataset(path, layout, fillvalue=0)
+    output = tmp_path / "result.ptir"
+    with pytest.raises(ValueError, match="in the file"):
+        write(source, output)
+    assert not output.exists()
+    assert list(tmp_path.glob(".ptir5-result-*")) == []
+
+
+def test_tree_nodes_attributes_are_preserved(source: Path, tmp_path: Path) -> None:
+    with h5py.File(source, "r+") as file:
+        file["TREE/NODES"].attrs["IndexVersion"] = np.array([3], dtype=np.int32)
+        file["TREE/NODES"].attrs["Note"] = np.bytes_(b"keep me")
+    output = tmp_path / "result.ptir"
+    write(source, output)
+    with h5py.File(output, "r") as file:
+        attrs = file["TREE/NODES"].attrs
+        assert attrs["IndexVersion"][0] == 3
+        assert bytes(attrs["Note"]) == b"keep me"
+        assert file["TREE/NODES"].shape == (2, 16)
+
+
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])
 def test_invalid_data_creates_no_output(source: Path, tmp_path: Path, failure: str) -> None:
     data = np.ones((2, 2, 3), dtype=np.float32)
