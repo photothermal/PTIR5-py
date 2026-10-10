@@ -291,6 +291,34 @@ def test_external_link_to_stack_child_is_rejected(
     assert list(tmp_path.glob(".ptir5-result-*")) == []
 
 
+@pytest.mark.parametrize("kind", ["soft", "external"])
+def test_linked_tree_node_is_rejected(source: Path, tmp_path: Path, kind: str) -> None:
+    """Retained tree leaves are part of the snapshot and must not be links."""
+    other = tmp_path / "other.h5"
+    with h5py.File(source, "r+") as file, h5py.File(other, "w") as target:
+        file.copy(f"TREE/{GUID}", target, name="leaf")
+        file.copy(f"TREE/{GUID}", file["TREE"], name="spare")
+        del file[f"TREE/{GUID}"]
+        file[f"TREE/{GUID}"] = (
+            h5py.SoftLink("/TREE/spare")
+            if kind == "soft"
+            else h5py.ExternalLink(other.name, "/leaf")
+        )
+    output = tmp_path / "result.ptir"
+    with pytest.raises(ValueError, match="local object"):
+        write(source, output)
+    assert not output.exists()
+    assert list(tmp_path.glob(".ptir5-result-*")) == []
+
+
+def test_hard_link_cycle_does_not_hang(source: Path, tmp_path: Path) -> None:
+    with h5py.File(source, "r+") as file:
+        file[f"MEASUREMENTS/{GUID}/Channel/loop"] = file["MEASUREMENTS"]
+    # The cycle is a nested member, so it is rejected (and the walk terminates).
+    with pytest.raises(ValueError, match="nested members"):
+        write(source, tmp_path / "result.ptir")
+
+
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])
 def test_invalid_data_creates_no_output(source: Path, tmp_path: Path, failure: str) -> None:
     data = np.ones((2, 2, 3), dtype=np.float32)

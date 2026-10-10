@@ -177,6 +177,25 @@ class HDF5Reader:
         return self.has_group("TREE")
 
 
+def _require_local_objects(root: h5py.Group) -> None:
+    """Reject any soft or external link anywhere in the document.
+
+    The copy is hashed and then published as a snapshot, so every retained object
+    must live inside it; a link would read or write another file or object.
+    """
+    pending, seen = [root], {root.id}
+    while pending:
+        group = pending.pop()
+        for name in group:
+            if not isinstance(group.get(name, getlink=True), h5py.HardLink):
+                path = f"{group.name.rstrip('/')}/{name}"
+                raise ValueError(f"{path} must be a local object, not a link")
+            child = group[name]
+            if isinstance(child, h5py.Group) and child.id not in seen:
+                seen.add(child.id)
+                pending.append(child)
+
+
 def append_stack_result(
     path: str | Path,
     source_guid: str,
@@ -196,12 +215,7 @@ def append_stack_result(
     with h5py.File(path, "r+") as document:
         if _convert_value(document.attrs.get("DocType")) != "PTIR5":
             raise ValueError("Expected root DocType PTIR5")
-        # An external or soft link would send the writes below into another file or
-        # object, outside the checksummed copy; require local objects before mutating.
-        for link_path in ("MEASUREMENTS", f"MEASUREMENTS/{source_guid}", "TREE", "TREE/NODES"):
-            link = document.get(link_path, getlink=True)
-            if link is not None and not isinstance(link, h5py.HardLink):
-                raise ValueError(f"{link_path} must be a local object, not a link")
+        _require_local_objects(document)
         source = document[f"MEASUREMENTS/{source_guid}"]
         frame_count = source["DATA"].shape[0]
         stop = frame_start + cube.shape[0]
@@ -224,9 +238,6 @@ def append_stack_result(
         }
         # Reject extensions whose semantics we cannot safely preserve/recompute.
         for name, child in source.items():
-            # Linked children would be read from outside the checksummed snapshot.
-            if not isinstance(source.get(name, getlink=True), h5py.HardLink):
-                raise ValueError(f"{name} must be a local object, not a link")
             if name == "DATA":
                 if child.dtype != np.float32 or child.ndim != 3:
                     raise ValueError("Source DATA must be rank-3 float32")
