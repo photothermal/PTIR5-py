@@ -227,6 +227,53 @@ def test_result_permissions_match_source(source: Path, tmp_path: Path) -> None:
     assert stat.S_IMODE(output.stat().st_mode) == 0o644
 
 
+def test_mode_is_applied_after_the_temporary_is_built(
+    source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read-only source mode must not reach the temporary before it is written."""
+    events: list[str] = []
+    real_append, real_copymode = writer.append_stack_result, shutil.copymode
+
+    def append(*args: object) -> None:
+        events.append("append")
+        real_append(*args)  # type: ignore[arg-type]
+
+    def copymode(src: Path, dst: Path) -> None:
+        events.append("copymode")
+        real_copymode(src, dst)
+
+    monkeypatch.setattr(writer, "append_stack_result", append)
+    monkeypatch.setattr(writer.shutil, "copymode", copymode)
+    write(source, tmp_path / "result.ptir")
+    assert events == ["append", "copymode"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_read_only_source_still_produces_a_result(source: Path, tmp_path: Path) -> None:
+    source.chmod(0o444)
+    output = tmp_path / "result.ptir"
+    write(source, output)
+    assert stat.S_IMODE(output.stat().st_mode) == 0o444
+
+
+@pytest.mark.parametrize("group", ["MEASUREMENTS", "TREE"])
+def test_external_link_to_format_group_is_rejected(
+    source: Path, tmp_path: Path, group: str
+) -> None:
+    other = tmp_path / "other.h5"
+    with h5py.File(source, "r+") as file, h5py.File(other, "w") as target:
+        file.copy(group, target)
+        del file[group]
+        file[group] = h5py.ExternalLink(other.name, f"/{group}")
+    before = other.read_bytes()
+    output = tmp_path / "result.ptir"
+    with pytest.raises(ValueError, match="local object"):
+        write(source, output)
+    assert other.read_bytes() == before
+    assert not output.exists()
+    assert list(tmp_path.glob(".ptir5-result-*")) == []
+
+
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])
 def test_invalid_data_creates_no_output(source: Path, tmp_path: Path, failure: str) -> None:
     data = np.ones((2, 2, 3), dtype=np.float32)

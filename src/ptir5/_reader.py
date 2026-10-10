@@ -196,6 +196,12 @@ def append_stack_result(
     with h5py.File(path, "r+") as document:
         if _convert_value(document.attrs.get("DocType")) != "PTIR5":
             raise ValueError("Expected root DocType PTIR5")
+        # An external or soft link would send the writes below into another file or
+        # object, outside the checksummed copy; require local objects before mutating.
+        for link_path in ("MEASUREMENTS", f"MEASUREMENTS/{source_guid}", "TREE", "TREE/NODES"):
+            link = document.get(link_path, getlink=True)
+            if link is not None and not isinstance(link, h5py.HardLink):
+                raise ValueError(f"{link_path} must be a local object, not a link")
         source = document[f"MEASUREMENTS/{source_guid}"]
         frame_count = source["DATA"].shape[0]
         stop = frame_start + cube.shape[0]
