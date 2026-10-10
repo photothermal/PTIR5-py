@@ -224,6 +224,9 @@ def append_stack_result(
         }
         # Reject extensions whose semantics we cannot safely preserve/recompute.
         for name, child in source.items():
+            # Linked children would be read from outside the checksummed snapshot.
+            if not isinstance(source.get(name, getlink=True), h5py.HardLink):
+                raise ValueError(f"{name} must be a local object, not a link")
             if name == "DATA":
                 if child.dtype != np.float32 or child.ndim != 3:
                     raise ValueError("Source DATA must be rank-3 float32")

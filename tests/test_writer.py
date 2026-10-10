@@ -274,6 +274,23 @@ def test_external_link_to_format_group_is_rejected(
     assert list(tmp_path.glob(".ptir5-result-*")) == []
 
 
+@pytest.mark.parametrize("child", ["NumAverages", "DATA", "Channel"])
+def test_external_link_to_stack_child_is_rejected(
+    source: Path, tmp_path: Path, child: str
+) -> None:
+    other = tmp_path / "other.h5"
+    path = f"MEASUREMENTS/{GUID}"
+    with h5py.File(source, "r+") as file, h5py.File(other, "w") as target:
+        file.copy(f"{path}/{child}", target, name=child)
+        del file[f"{path}/{child}"]
+        file[f"{path}/{child}"] = h5py.ExternalLink(other.name, f"/{child}")
+    output = tmp_path / "result.ptir"
+    with pytest.raises(ValueError, match="local object"):
+        write(source, output)
+    assert not output.exists()
+    assert list(tmp_path.glob(".ptir5-result-*")) == []
+
+
 @pytest.mark.parametrize("failure", ["nonfinite", "dtype", "rank", "spatial", "empty"])
 def test_invalid_data_creates_no_output(source: Path, tmp_path: Path, failure: str) -> None:
     data = np.ones((2, 2, 3), dtype=np.float32)
