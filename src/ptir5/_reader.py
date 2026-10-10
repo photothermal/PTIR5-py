@@ -1,4 +1,4 @@
-"""Low-level HDF5 reader — the only module that imports h5py."""
+"""Low-level HDF5 access — the only module that imports h5py."""
 
 from __future__ import annotations
 
@@ -76,8 +76,10 @@ class HDF5Reader:
 
     def build_metadata_view(self, path: str) -> MetadataView:
         """Create a MetadataView that lazily loads all attributes from *path*."""
+
         def load() -> dict[str, Any]:
             return self._read_all_attrs(path)
+
         return MetadataView(load)
 
     def _read_all_attrs(self, path: str) -> dict[str, Any]:
@@ -101,9 +103,7 @@ class HDF5Reader:
         """Return the h5py.Dataset at *path*, raising on type mismatch."""
         ds = self._file()[path]
         if not isinstance(ds, h5py.Dataset):
-            raise InvalidMeasurementError(
-                f"Expected Dataset, got {type(ds).__name__} at {path}"
-            )
+            raise InvalidMeasurementError(f"Expected Dataset, got {type(ds).__name__} at {path}")
         return ds
 
     def read_dataset(self, path: str) -> np.ndarray[Any, Any]:
@@ -175,3 +175,174 @@ class HDF5Reader:
 
     def has_tree(self) -> bool:
         return self.has_group("TREE")
+
+
+def _require_local_objects(root: h5py.Group) -> None:
+    """Reject links and out-of-file dataset storage anywhere in the document.
+
+    The copy is hashed and then published as a snapshot, so every retained object
+    and every dataset payload must live inside it; a soft or external link, an
+    externally stored dataset or a virtual dataset would read another file.
+    """
+    pending, seen = [root], {root.id}
+    while pending:
+        group = pending.pop()
+        for name in group:
+            if not isinstance(group.get(name, getlink=True), h5py.HardLink):
+                path = f"{group.name.rstrip('/')}/{name}"
+                raise ValueError(f"{path} must be a local object, not a link")
+            child = group[name]
+            if isinstance(child, h5py.Dataset) and (child.is_virtual or child.external):
+                raise ValueError(
+                    f"{child.name} must store its data in the file, not externally or virtually"
+                )
+            if isinstance(child, h5py.Group) and child.id not in seen:
+                seen.add(child.id)
+                pending.append(child)
+
+
+def append_stack_result(
+    path: str | Path,
+    source_guid: str,
+    result_guid: str,
+    cube: np.ndarray[Any, Any],
+    frame_start: int,
+    label: str,
+    provenance_json: str,
+    output_path: str,
+) -> None:
+    """Append a validated derived stack to a private temporary document copy.
+
+    Layout follows PSC.PTIR5.SDK FloatImageStack and TreeLeaf: DATA is frame/Y/X,
+    extrema exist as both scalar attributes and per-frame datasets, and NODES
+    stores Guid.ToByteArray() rows (little-endian GUID bytes).
+    """
+    with h5py.File(path, "r+") as document:
+        if _convert_value(document.attrs.get("DocType")) != "PTIR5":
+            raise ValueError("Expected root DocType PTIR5")
+        _require_local_objects(document)
+        source = document[f"MEASUREMENTS/{source_guid}"]
+        frame_count = source["DATA"].shape[0]
+        stop = frame_start + cube.shape[0]
+        frame_names = {
+            "BackgroundScale",
+            "BalDetSum",
+            "BalDetVoltage",
+            "BottomFocus",
+            "DcValue",
+            "Humidity",
+            "MaxValue",
+            "MinValue",
+            "NumAverages",
+            "PumpPower",
+            "StokesPower",
+            "Temperature",
+            "TopFocus",
+            "Wavenumber",
+            "ComponentCompletion",
+        }
+        # Reject extensions whose semantics we cannot safely preserve/recompute.
+        for name, child in source.items():
+            if name == "DATA":
+                if child.dtype != np.float32 or child.ndim != 3:
+                    raise ValueError("Source DATA must be rank-3 float32")
+            elif name in frame_names:
+                if not isinstance(child, h5py.Dataset) or child.shape != (frame_count,):
+                    raise ValueError(f"Malformed per-frame metadata: {name}")
+            elif name in {"Channel", "Palette", "GENERATED"}:
+                if not isinstance(child, h5py.Group):
+                    raise ValueError(f"Stack child must be a group: {name}")
+                # Channel/Palette carry attributes only; nested members could hold
+                # per-frame data that a copy would leave stale for a shorter result.
+                if name != "GENERATED" and len(child) != 0:
+                    raise ValueError(f"{name} must not contain nested members")
+            else:
+                raise ValueError(f"Unsupported stack child for derived output: {name}")
+        if "Wavenumber" in source:
+            actual = source["Wavenumber"][frame_start:stop]
+            expected = float(_convert_value(source.attrs["XStart"])) + np.arange(
+                frame_start, stop
+            ) * float(_convert_value(source.attrs["XIncrement"]))
+            # Stored wavenumbers are rounded to the dataset dtype, so compare at that precision.
+            eps = np.finfo(actual.dtype).eps if actual.dtype.kind == "f" else 0.0
+            tolerance = 4 * eps * max(float(np.max(np.abs(expected), initial=0.0)), 1.0)
+            if not np.allclose(actual, expected, rtol=0.0, atol=tolerance):
+                raise ValueError("Per-frame wavenumbers do not match the regular source axis")
+        tree = document.require_group("TREE")
+        if "NODES" in tree:
+            nodes = tree["NODES"][()]
+            if nodes.ndim != 2 or nodes.shape[1] != 16 or nodes.dtype != np.uint8:
+                raise ValueError("Malformed TREE/NODES")
+        else:
+            # Do not invent a tree that hides existing measurements.
+            raise ValueError("Source requires an existing document tree with TREE/NODES")
+        result = document["MEASUREMENTS"].create_group(result_guid)
+        for name, value in source.attrs.items():
+            result.attrs[name] = value
+        for name in {"Channel", "Palette"} & set(source):
+            document.copy(source[name], result, name=name)
+        result.create_dataset(
+            "DATA", data=cube, chunks=(1, *cube.shape[1:]), maxshape=(None, *cube.shape[1:])
+        )
+        for name in frame_names & set(source):
+            values = source[name][frame_start:stop]
+            if name in {"MinValue", "MaxValue"}:
+                values = cube.min(axis=(1, 2)) if name == "MinValue" else cube.max(axis=(1, 2))
+            elif name == "ComponentCompletion":
+                values = np.ones(cube.shape[0], dtype=np.uint8)
+            sliced = result.create_dataset(name, data=values, maxshape=(None,), chunks=True)
+            # Units, calibration and extension markers describe the whole dataset.
+            for attr_name, attr_value in source[name].attrs.items():
+                sliced.attrs[attr_name] = attr_value
+        for name, values in (
+            ("MinValue", cube.min(axis=(1, 2))),
+            ("MaxValue", cube.max(axis=(1, 2))),
+        ):
+            if name not in result:
+                result.create_dataset(name, data=values, maxshape=(None,), chunks=True)
+            result.attrs[name] = np.array(
+                [values.min() if name == "MinValue" else values.max()], dtype=np.float32
+            )
+        if "GENERATED" in result:
+            del result["GENERATED"]
+        result.create_group("GENERATED")
+        # Palette bounds must describe the new values, not a source display cache.
+        for name in ("PaletteMinValue", "PaletteMaxValue"):
+            if name in result.attrs:
+                del result.attrs[name]
+        result.attrs["PaletteAutoRange"] = np.array([1], dtype=np.uint8)
+        result.attrs["PaletteAutoRangeToStack"] = np.array([1], dtype=np.uint8)
+        # Keep the source attribute's precision so the rebased axis is not coarsened.
+        x_start_dtype = np.asarray(source.attrs["XStart"]).dtype
+        if x_start_dtype.kind != "f":
+            x_start_dtype = np.dtype(np.float64)
+        with np.errstate(over="ignore"):
+            rebased_start = np.array(
+                [
+                    float(_convert_value(source.attrs["XStart"]))
+                    + frame_start * float(_convert_value(source.attrs["XIncrement"]))
+                ],
+                dtype=x_start_dtype,
+            )
+        if not np.isfinite(rebased_start).all():
+            raise ValueError("Rebased XStart must be finite in the stored precision")
+        result.attrs["XStart"] = rebased_start
+        # Assigning replaces fixed-length source strings instead of truncating them.
+        result.attrs["Label"] = np.bytes_(label.encode("utf-8"))
+        result.attrs["ProcessingProvenance"] = np.bytes_(provenance_json.encode("utf-8"))
+        if "Scratch" in result.attrs:
+            del result.attrs["Scratch"]
+        document.attrs["FilePath"] = np.bytes_(output_path.encode("utf-8"))
+        leaf = tree.create_group(result_guid)
+        leaf.attrs["TYPE"] = source.attrs["TYPE"]
+        leaf.attrs["Label"] = np.bytes_(label.encode("utf-8"))
+        new_row = np.frombuffer(uuid.UUID(result_guid).bytes_le, dtype=np.uint8).reshape(1, 16)
+        node_attrs = dict(tree["NODES"].attrs)
+        del tree["NODES"]
+        replacement = tree.create_dataset(
+            "NODES", data=np.concatenate([nodes, new_row]), maxshape=(None, 16), chunks=True
+        )
+        # Recreating the dataset must not drop attributes attached to the tree index.
+        for attr_name, attr_value in node_attrs.items():
+            replacement.attrs[attr_name] = attr_value
+        document.flush()
