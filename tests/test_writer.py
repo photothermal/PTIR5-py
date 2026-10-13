@@ -109,6 +109,47 @@ def test_result_round_trip_preserves_source_and_recomputes_caches(
         np.testing.assert_array_equal(group["ComponentCompletion"], [1, 1])
 
 
+@pytest.mark.parametrize("variable_length", [False, True])
+def test_utf8_metadata_retains_sdk_encoding(
+    source: Path, tmp_path: Path, variable_length: bool
+) -> None:
+    """SDK readers must see wavenumbers and labels as UTF-8, not ASCII replacement bytes."""
+    units = "cm⁻¹"
+    with h5py.File(source, "r+") as file:
+        stack = file[f"MEASUREMENTS/{GUID}"]
+        del stack.attrs["XUnits"]
+        stack.attrs.create(
+            "XUnits",
+            units if variable_length else units.encode("utf-8"),
+            dtype=h5py.string_dtype("utf-8", None if variable_length else len(units.encode())),
+        )
+        for owner in (stack["Wavenumber"], file["TREE/NODES"]):
+            owner.attrs.create("Description", "µm".encode(), dtype=h5py.string_dtype("utf-8", 3))
+    before = source.read_bytes()
+    output = tmp_path / "résultat.ptir"
+    label = "O-PTIR — SPEND"
+    guid = write(source, output, label=label, provenance={"notes": "Δ and µ"})
+    assert source.read_bytes() == before
+    with h5py.File(output, "r") as file:
+        result = file[f"MEASUREMENTS/{guid}"]
+        # PTIR Studio decodes with the HDF character-set flag, unlike the Python reader.
+        for owner, key in (
+            (result, "XUnits"),
+            (result, "Label"),
+            (result, "ProcessingProvenance"),
+            (result["Wavenumber"], "Description"),
+            (file["TREE/NODES"], "Description"),
+            (file[f"TREE/{guid}"], "Label"),
+            (file, "FilePath"),
+        ):
+            assert owner.attrs.get_id(key).get_type().get_cset() == h5py.h5t.CSET_UTF8
+        raw_units = result.attrs["XUnits"]
+        assert (raw_units if isinstance(raw_units, str) else raw_units.decode("utf-8")) == units
+        assert result.attrs["Label"].decode("utf-8") == label
+        np.testing.assert_array_equal(result["DATA"], np.arange(12).reshape(2, 2, 3) - 4)
+        np.testing.assert_array_equal(result["Wavenumber"], [1004, 1008])
+
+
 def test_inexact_float32_increment_is_accepted(source: Path, tmp_path: Path) -> None:
     """Wavenumbers rounded to float32 must still match a regular float64 axis."""
     with h5py.File(source, "r+") as file:
