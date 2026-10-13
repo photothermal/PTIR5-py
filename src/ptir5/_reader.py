@@ -201,6 +201,20 @@ def _require_local_objects(root: h5py.Group) -> None:
                 pending.append(child)
 
 
+def _copy_attributes(source: h5py.Group | h5py.Dataset, target: h5py.Group | h5py.Dataset) -> None:
+    """Preserve stored datatypes, including UTF-8 character-set declarations."""
+    for name, value in source.attrs.items():
+        target.attrs.create(name, value, dtype=source.attrs.get_id(name).dtype)
+
+
+def _set_utf8_attribute(target: h5py.Group | h5py.File, name: str, value: str) -> None:
+    """Write a fixed-size UTF-8 string that the PTIR5 SDK decodes correctly."""
+    encoded = value.encode("utf-8")
+    if name in target.attrs:
+        del target.attrs[name]
+    target.attrs.create(name, encoded, dtype=h5py.string_dtype("utf-8", max(1, len(encoded))))
+
+
 def append_stack_result(
     path: str | Path,
     source_guid: str,
@@ -277,8 +291,7 @@ def append_stack_result(
             # Do not invent a tree that hides existing measurements.
             raise ValueError("Source requires an existing document tree with TREE/NODES")
         result = document["MEASUREMENTS"].create_group(result_guid)
-        for name, value in source.attrs.items():
-            result.attrs[name] = value
+        _copy_attributes(source, result)
         for name in {"Channel", "Palette"} & set(source):
             document.copy(source[name], result, name=name)
         result.create_dataset(
@@ -292,8 +305,7 @@ def append_stack_result(
                 values = np.ones(cube.shape[0], dtype=np.uint8)
             sliced = result.create_dataset(name, data=values, maxshape=(None,), chunks=True)
             # Units, calibration and extension markers describe the whole dataset.
-            for attr_name, attr_value in source[name].attrs.items():
-                sliced.attrs[attr_name] = attr_value
+            _copy_attributes(source[name], sliced)
         for name, values in (
             ("MinValue", cube.min(axis=(1, 2))),
             ("MaxValue", cube.max(axis=(1, 2))),
@@ -328,21 +340,24 @@ def append_stack_result(
             raise ValueError("Rebased XStart must be finite in the stored precision")
         result.attrs["XStart"] = rebased_start
         # Assigning replaces fixed-length source strings instead of truncating them.
-        result.attrs["Label"] = np.bytes_(label.encode("utf-8"))
-        result.attrs["ProcessingProvenance"] = np.bytes_(provenance_json.encode("utf-8"))
+        _set_utf8_attribute(result, "Label", label)
+        _set_utf8_attribute(result, "ProcessingProvenance", provenance_json)
         if "Scratch" in result.attrs:
             del result.attrs["Scratch"]
-        document.attrs["FilePath"] = np.bytes_(output_path.encode("utf-8"))
+        _set_utf8_attribute(document, "FilePath", output_path)
         leaf = tree.create_group(result_guid)
-        leaf.attrs["TYPE"] = source.attrs["TYPE"]
-        leaf.attrs["Label"] = np.bytes_(label.encode("utf-8"))
+        leaf.attrs.create("TYPE", source.attrs["TYPE"], dtype=source.attrs.get_id("TYPE").dtype)
+        _set_utf8_attribute(leaf, "Label", label)
         new_row = np.frombuffer(uuid.UUID(result_guid).bytes_le, dtype=np.uint8).reshape(1, 16)
-        node_attrs = dict(tree["NODES"].attrs)
+        node_attrs = {
+            name: (value, tree["NODES"].attrs.get_id(name).dtype)
+            for name, value in tree["NODES"].attrs.items()
+        }
         del tree["NODES"]
         replacement = tree.create_dataset(
             "NODES", data=np.concatenate([nodes, new_row]), maxshape=(None, 16), chunks=True
         )
         # Recreating the dataset must not drop attributes attached to the tree index.
-        for attr_name, attr_value in node_attrs.items():
-            replacement.attrs[attr_name] = attr_value
+        for attr_name, (attr_value, attr_dtype) in node_attrs.items():
+            replacement.attrs.create(attr_name, attr_value, dtype=attr_dtype)
         document.flush()

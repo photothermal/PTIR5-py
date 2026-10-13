@@ -39,6 +39,12 @@ inherited source context, not a claim of a new acquisition. The new measurement'
 `ProcessingProvenance` JSON records the source checksum/GUID, result GUID, frame
 range and caller's processing record.
 
+Inherited metadata keeps its HDF5 datatype and string character set. New labels,
+provenance and file paths are fixed-size UTF-8 attributes. This matters to PTIR
+Studio and the .NET SDK, which honor the declared character set: storing UTF-8
+bytes as ASCII corrupts units such as `cm⁻¹` and can change spectrum presentation.
+Numeric coordinate/value round trips alone do not detect that interoperability bug.
+
 The derived stack has recomputed global/per-frame minima and maxima, automatic
 palette ranges, and no copied generated children. Unknown stack child layouts are
 rejected instead of copying potentially stale caches. Optional component-completion
