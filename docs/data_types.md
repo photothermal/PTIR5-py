@@ -213,9 +213,11 @@ it, normalized. The setting is stored in two attributes, `NormalizeMode` and
 - `Wavenumber` — Wavenumber at which image was collected (cm-1)
 - `PixelFormat` — Pixel format for byte images
 
-### Acquisition Attributes Added in PTIR Studio 5.1+
+### Newer Acquisition and Analysis Attributes
 
-All of these are plain attributes, read through `m.metadata[...]`:
+PSC.PTIR5.SDK added these attributes during 2026, so files written by older
+PTIR Studio versions do not contain them. All are plain attributes, read
+through `m.metadata[...]`:
 
 | Key | Type | Units / values | Found on |
 |-----|------|----------------|----------|

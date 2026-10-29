@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `FLPTIRImage` is now a marker mixin, like `FLPTIRImageStack`. Legacy rank-3 instances still satisfy `isinstance(m, ByteImage2D)`; rank-2 instances satisfy `isinstance(m, FloatImage2D)`; both satisfy `isinstance(m, FLPTIRImage)`
+- `TYPE_TO_SHAPE[MeasurementType.FLPTIRImage]` is now `DataShape.FLOAT_IMAGE_2D` (was `BYTE_IMAGE_2D`), matching the current rank-2 layout. As with `FLPTIRImageStack`, it is only a default: each instance's `data_shape` reflects its actual storage, so legacy rank-3 images report `BYTE_IMAGE_2D`
 
 ### Fixed
 - `FLPTIRImage` now reads the canonical rank-2 layout (`float32`, `uint16` or `uint8`) that current PTIR Studio versions write. Previously these files were typed as byte images and `bytes_per_pixel` raised `IndexError`. `data_float32` returns `(H, W)` float32 for every layout; unsupported layouts raise `InvalidMeasurementError`
