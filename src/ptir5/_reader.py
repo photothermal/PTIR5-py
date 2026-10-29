@@ -67,6 +67,10 @@ class HDF5Reader:
             )
         return val
 
+    def has_attribute(self, path: str, name: str) -> bool:
+        """True if the object at *path* has an attribute called *name*."""
+        return name in self._file()[path].attrs
+
     def read_label(self, path: str) -> str:
         """Read the Label attribute, returning '' if missing."""
         grp = self._file()[path]

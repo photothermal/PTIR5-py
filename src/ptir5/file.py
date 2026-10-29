@@ -175,14 +175,17 @@ class PTIR5File:
     def _resolvable_children(self, tree_path: str, excluded: frozenset[str]) -> list[str]:
         """Child GUIDs of a NODES list that can be built (spec §14.5).
 
-        Rows naming a GUID with no ``/TREE/{guid}`` group (e.g. left by an
-        interrupted attach or detach) and rows naming an excluded GUID (the
-        folder itself or an ancestor, which would form a cycle) are skipped.
+        Rows naming a GUID with no ``/TREE/{guid}`` group, or with a group that
+        has no ``TYPE`` yet (both can be left by an interrupted attach or
+        detach), and rows naming an excluded GUID (the folder itself or an
+        ancestor, which would form a cycle) are skipped.
         """
         return [
             cid
             for cid in self._reader.read_tree_node_ids(tree_path)
-            if cid not in excluded and self._reader.has_group(f"TREE/{cid}")
+            if cid not in excluded
+            and self._reader.has_group(f"TREE/{cid}")
+            and self._reader.has_attribute(f"TREE/{cid}", "TYPE")
         ]
 
     def _build_tree_node(self, guid: str, ancestors: frozenset[str]) -> TreeFolder | TreeLeaf:

@@ -206,3 +206,15 @@ class TestUnresolvedTreeNodes:
             (loop,) = f.tree.folders
             assert loop.folders == ()
             assert [leaf.guid for leaf in loop.leaves] == [self.LEAF]
+
+    def test_tree_group_without_type_is_skipped(self, write_ptir: WritePtir) -> None:
+        # An interrupted attach can create /TREE/{guid} before writing its attributes.
+        path = write_ptir("OPTIRSpectrum", np.zeros(3, np.float32))
+        with h5py.File(path, "a") as h5:
+            tree = h5.create_group("TREE")
+            tree.create_dataset("NODES", data=_guid_rows(self.LEAF, self.MISSING))
+            tree.create_group(self.LEAF).attrs["TYPE"] = np.bytes_(b"OPTIRSpectrum")
+            tree.create_group(self.MISSING)
+        with ptir5.open(path) as f:
+            assert f.tree is not None
+            assert [leaf.guid for leaf in f.tree.leaves] == [self.LEAF]

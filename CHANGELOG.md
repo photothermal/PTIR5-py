@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FLPTIRImage` now reads the canonical rank-2 layout (`float32`, `uint16` or `uint8`) that current PTIR Studio versions write. Previously these files were typed as byte images and `bytes_per_pixel` raised `IndexError`. `data_float32` returns `(H, W)` float32 for every layout, and `pixel_format` on rank-2 images reports the format the dtype implies (`Gray32Float`, `Gray16` or `Gray8`), as the SDK does; unsupported layouts raise `InvalidMeasurementError`
 - Non-UTF-8 bytes in a string attribute no longer abort metadata loading; they decode as U+FFFD. This covers both fixed-length strings and variable-length strings, which h5py returns surrogate-escaped and which would otherwise fail when printed or encoded
 - `write_image_stack_result` no longer copies the source's noise-frame link (`NoiseFrameID`, `NoiseFrameCorrectionAppliedAtWrite`, `NoiseFrameCorrectionDisplayEnabled`) onto the derived stack. Inheriting it made PTIR Studio add the source noise frame onto derived values when display correction was off
-- Tree `NODES` rows naming a GUID with no `/TREE` group (as an interrupted attach or detach can leave) and folder cycles are skipped instead of raising `KeyError` / `RecursionError` (spec §14.5)
+- Tree `NODES` rows naming a GUID with no `/TREE` group, or with a group that has no `TYPE` attribute (as an interrupted attach or detach can leave), and folder cycles are skipped instead of raising `KeyError` / `RecursionError` (spec §14.5)
 
 ## [0.1.1] - 2026-06-12
 
