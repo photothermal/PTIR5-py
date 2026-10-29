@@ -24,6 +24,8 @@ class MeasurementType(StrEnum):
     CameraImageStack = "CameraImageStack"
     FLPTIRImageStack = "FLPTIRImageStack"
     PTSRSImageStack = "PTSRSImageStack"
+    TimeDomainBurst = "TimeDomainBurst"
+    TimeDomainCube = "TimeDomainCube"
 
 
 class DataShape(Enum):
@@ -91,4 +93,6 @@ TYPE_TO_SHAPE: dict[MeasurementType, DataShape] = {
     # is missing or has an unexpected shape.
     MeasurementType.FLPTIRImageStack: DataShape.FLOAT_IMAGE_STACK_3D,
     MeasurementType.PTSRSImageStack: DataShape.FLOAT_HYPERCUBE_3D,
+    MeasurementType.TimeDomainBurst: DataShape.FLOAT_SPECTRUM_1D,
+    MeasurementType.TimeDomainCube: DataShape.FLOAT_HYPERCUBE_3D,
 }

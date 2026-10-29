@@ -5,7 +5,8 @@ Hierarchy:
     ├── FloatSpectrum1D    — 1D float spectra
     ├── FloatImage2D       — 2D float images (OPTIR, Generated, PTSRS)
     ├── ByteImage2D        — 2D byte images (Camera, Fluorescence, FLPTIR)
-    ├── FloatHypercube3D   — 3D float cubes (Hyperspectra, OPTIRImageStack)
+    ├── FloatHypercube3D   — 3D float cubes (OPTIRImageStack, PTSRSImageStack)
+    │   └── HyperspectralCube — spectral and time-domain cubes (one spectrum per pixel)
     └── ImageStack3D       — abstract base for stacks of 2D images
         ├── ByteImageStack3D   — rank-4 uint8 (CameraImageStack, legacy FLPTIRImageStack)
         └── FloatImageStack3D  — rank-3 float32 (rank-3 FLPTIRImageStack)
@@ -231,6 +232,16 @@ class FloatHypercube3D(Measurement):
         )
 
 
+class HyperspectralCube(FloatHypercube3D):
+    """A cube holding one spectrum (or time-domain waveform) per X/Y pixel.
+
+    Base for :class:`OPTIRHyperspectra`, :class:`RamanHyperspectra` and
+    :class:`TimeDomainCube`, mirroring the C# SDK's ``HyperspectralArrayData``.
+    Image stacks (:class:`OPTIRImageStack`, :class:`PTSRSImageStack`) share the
+    ``(points, height, width)`` storage but are not hyperspectral cubes.
+    """
+
+
 class ImageStack3D(Measurement):
     """Abstract base for a stack of 2D images.
 
@@ -300,7 +311,7 @@ class FloatImageStack3D(ImageStack3D):
 
 
 # ---------------------------------------------------------------------------
-# Concrete type classes (16 types)
+# Concrete type classes (18 types)
 # ---------------------------------------------------------------------------
 
 # Spectra (FloatSpectrum1D)
@@ -308,6 +319,8 @@ class OPTIRSpectrum(FloatSpectrum1D): ...
 class RamanSpectrum(FloatSpectrum1D): ...
 class GeneratedSpectrum(FloatSpectrum1D): ...
 class PTSRSSpectrum(FloatSpectrum1D): ...
+class TimeDomainBurst(FloatSpectrum1D):
+    """A waveform captured at one X/Y location; the x-axis is time (µs), not wavenumber."""
 
 # Float images (FloatImage2D)
 class OPTIRImage(FloatImage2D): ...
@@ -319,9 +332,13 @@ class CameraImage(ByteImage2D): ...
 class FluorescenceImage(ByteImage2D): ...
 class FLPTIRImage(ByteImage2D): ...
 
-# Float hypercubes (FloatHypercube3D)
-class OPTIRHyperspectra(FloatHypercube3D): ...
-class RamanHyperspectra(FloatHypercube3D): ...
+# Hyperspectral cubes (HyperspectralCube)
+class OPTIRHyperspectra(HyperspectralCube): ...
+class RamanHyperspectra(HyperspectralCube): ...
+class TimeDomainCube(HyperspectralCube):
+    """One time-domain waveform per X/Y pixel; the leading axis is time (µs)."""
+
+# Float image stacks stored as (images, height, width) float32 (FloatHypercube3D)
 class OPTIRImageStack(FloatHypercube3D): ...
 class PTSRSImageStack(FloatHypercube3D): ...
 
@@ -467,6 +484,8 @@ _TYPE_TO_CLASS: dict[str, type[Measurement]] = {
     # FLPTIRImageStack is rank-dispatched in build_measurement, not via this
     # table, because its concrete class depends on the on-disk dataset shape.
     "PTSRSImageStack": PTSRSImageStack,
+    "TimeDomainBurst": TimeDomainBurst,
+    "TimeDomainCube": TimeDomainCube,
 }
 
 def _infer_shape(ndim: int, dtype: np.dtype[Any]) -> DataShape | None:

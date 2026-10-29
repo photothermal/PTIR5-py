@@ -28,6 +28,7 @@ from ptir5.models import (
     FluorescenceImage,
     GeneratedImage,
     GeneratedSpectrum,
+    HyperspectralCube,
     ImageStack3D,
     Measurement,
     OPTIRHyperspectra,
@@ -39,6 +40,8 @@ from ptir5.models import (
     PTSRSSpectrum,
     RamanHyperspectra,
     RamanSpectrum,
+    TimeDomainBurst,
+    TimeDomainCube,
 )
 from ptir5.tree import TreeFolder, TreeLeaf, TreeRoot
 from ptir5.writer import write_image_stack_result
@@ -80,6 +83,7 @@ __all__ = [
     "FloatImage2D",
     "ByteImage2D",
     "FloatHypercube3D",
+    "HyperspectralCube",
     "ImageStack3D",
     "ByteImageStack3D",
     "FloatImageStack3D",
@@ -99,6 +103,8 @@ __all__ = [
     "CameraImageStack",
     "FLPTIRImageStack",
     "PTSRSImageStack",
+    "TimeDomainBurst",
+    "TimeDomainCube",
     # Metadata
     "MetadataView",
     # Tree

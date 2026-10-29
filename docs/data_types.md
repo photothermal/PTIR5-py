@@ -9,7 +9,8 @@ on-disk storage format.
 
 ### FloatSpectrum1D
 - **Array**: `(length,)` of `float32`
-- **Use**: Single-point spectra (O-PTIR, Raman, PTSRS, Generated)
+- **Use**: Single-point spectra (O-PTIR, Raman, PTSRS, Generated) and time-domain
+  bursts (x-axis in µs)
 - **Properties**: `num_points`, `x_start`, `x_increment`, `x_values`
 
 ### FloatImage2D
@@ -27,6 +28,13 @@ on-disk storage format.
 - **Use**: Hyperspectral data and float image stacks where axis 0 is spectral
 - **Properties**: `num_points`, `pixel_width`, `pixel_height`, `x_values`
 - **Methods**: `read_spectrum(x, y)`, `read_image(index)`
+
+### HyperspectralCube
+- **Inherits**: `FloatHypercube3D`
+- **Use**: Cubes holding one spectrum per pixel: O-PTIR and Raman hyperspectra,
+  and time-domain cubes (one waveform per pixel, axis 0 in µs). Mirrors the C#
+  SDK's `HyperspectralArrayData`. `OPTIRImageStack` and `PTSRSImageStack` share
+  the storage shape but are not hyperspectral cubes.
 
 ### ImageStack3D (abstract)
 - **Use**: Common base for any stack of 2D images (axis 0 is frame index, not
@@ -50,7 +58,7 @@ on-disk storage format.
 - **Properties**: `num_images`, `pixel_width`, `pixel_height`, `pixel_format`
 - **Methods**: `read_image(index)`
 
-## 16 Concrete Types
+## 18 Concrete Types
 
 | TYPE String | Base Shape | Class |
 |-------------|-----------|-------|
@@ -58,14 +66,16 @@ on-disk storage format.
 | `RamanSpectrum` | FloatSpectrum1D | `ptir5.RamanSpectrum` |
 | `GeneratedSpectrum` | FloatSpectrum1D | `ptir5.GeneratedSpectrum` |
 | `PTSRSSpectrum` | FloatSpectrum1D | `ptir5.PTSRSSpectrum` |
+| `TimeDomainBurst` | FloatSpectrum1D | `ptir5.TimeDomainBurst` |
 | `OPTIRImage` | FloatImage2D | `ptir5.OPTIRImage` |
 | `GeneratedImage` | FloatImage2D | `ptir5.GeneratedImage` |
 | `PTSRSImage` | FloatImage2D | `ptir5.PTSRSImage` |
 | `CameraImage` | ByteImage2D | `ptir5.CameraImage` |
 | `FluorescenceImage` | ByteImage2D | `ptir5.FluorescenceImage` |
 | `FLPTIRImage` | ByteImage2D | `ptir5.FLPTIRImage` |
-| `OPTIRHyperspectra` | FloatHypercube3D | `ptir5.OPTIRHyperspectra` |
-| `RamanHyperspectra` | FloatHypercube3D | `ptir5.RamanHyperspectra` |
+| `OPTIRHyperspectra` | HyperspectralCube | `ptir5.OPTIRHyperspectra` |
+| `RamanHyperspectra` | HyperspectralCube | `ptir5.RamanHyperspectra` |
+| `TimeDomainCube` | HyperspectralCube | `ptir5.TimeDomainCube` |
 | `OPTIRImageStack` | FloatHypercube3D | `ptir5.OPTIRImageStack` |
 | `PTSRSImageStack` | FloatHypercube3D | `ptir5.PTSRSImageStack` |
 | `CameraImageStack` | ByteImageStack3D | `ptir5.CameraImageStack` |

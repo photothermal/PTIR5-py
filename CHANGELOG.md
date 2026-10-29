@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `TimeDomainBurst` and `TimeDomainCube` measurement types (PSC.PTIR5.SDK time-domain capture); previously these loaded as generic `Measurement`
+- `HyperspectralCube` base class for `OPTIRHyperspectra`, `RamanHyperspectra` and `TimeDomainCube`
+
 ## [0.1.1] - 2026-06-12
 
 ### Added

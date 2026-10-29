@@ -101,6 +101,24 @@ Inherits from `Measurement`. 3D float cube `(points, height, width)`.
 | `read_spectrum(x, y)` | `np.ndarray` | Spectrum at pixel (x, y) |
 | `read_image(index)` | `np.ndarray` | Image at spectral index |
 
+## HyperspectralCube
+
+Inherits from `FloatHypercube3D`. Base for cubes holding one spectrum or
+waveform per pixel: `OPTIRHyperspectra`, `RamanHyperspectra` and
+`TimeDomainCube`. `OPTIRImageStack` and `PTSRSImageStack` are
+`FloatHypercube3D` but not `HyperspectralCube`.
+
+## Time-domain types
+
+- `TimeDomainBurst` (`FloatSpectrum1D`): one waveform captured at a single X/Y
+  location. `x_values` is time in µs (`XStart` = capture delay, `XIncrement` =
+  1/sample rate).
+- `TimeDomainCube` (`HyperspectralCube`): one waveform per pixel, stored as
+  `(samples, height, width)` `float32`.
+
+Capture provenance is available through `metadata`: `SampleRate` (Hz),
+`BurstBackend`, `BurstInputSource`, `BurstOverflow` (byte `0`/`1`).
+
 ## ImageStack3D
 
 Inherits from `Measurement`. Abstract base for a stack of 2D images (axis 0 is
@@ -206,7 +224,8 @@ Attributes from sub-groups (Channel, ParticleData, ROIData, Palette) are prefixe
 `OPTIRSpectrum`, `RamanSpectrum`, `GeneratedSpectrum`, `PTSRSSpectrum`,
 `OPTIRImage`, `GeneratedImage`, `PTSRSImage`, `CameraImage`,
 `FluorescenceImage`, `FLPTIRImage`, `OPTIRHyperspectra`, `RamanHyperspectra`,
-`OPTIRImageStack`, `CameraImageStack`, `FLPTIRImageStack`, `PTSRSImageStack`
+`OPTIRImageStack`, `CameraImageStack`, `FLPTIRImageStack`, `PTSRSImageStack`,
+`TimeDomainBurst`, `TimeDomainCube`
 
 ### DataShape (Enum)
 
