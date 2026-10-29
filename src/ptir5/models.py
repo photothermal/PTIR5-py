@@ -156,6 +156,7 @@ class Measurement:
         "_reader",
         "_metadata",
         "_generated",
+        "_auxiliary",
     )
 
     def __init__(
@@ -179,6 +180,7 @@ class Measurement:
         self._reader = reader
         self._metadata = metadata
         self._generated = generated
+        self._auxiliary: AuxiliaryDatasets | None = None
 
     @property
     def guid(self) -> str:
@@ -222,8 +224,14 @@ class Measurement:
 
     @property
     def auxiliary(self) -> AuxiliaryDatasets:
-        """Side datasets stored next to DATA (per-pixel or per-frame arrays)."""
-        return AuxiliaryDatasets(self._reader, self._hdf5_path)
+        """Side datasets stored next to DATA (per-pixel or per-frame arrays).
+
+        The mapping and its name list are kept per measurement; each value is
+        still read from the file on every access.
+        """
+        if self._auxiliary is None:
+            self._auxiliary = AuxiliaryDatasets(self._reader, self._hdf5_path)
+        return self._auxiliary
 
     def __repr__(self) -> str:
         return (

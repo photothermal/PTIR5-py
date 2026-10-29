@@ -54,7 +54,7 @@ The main entry point for accessing PTIR5 file contents.
 ## AuxiliaryDatasets
 
 Read-only `Mapping[str, np.ndarray]` over the sibling datasets of a
-measurement, excluding `DATA`. The name list is read once; values are read
+measurement, excluding `DATA`. The name list is read once per measurement; values are read
 from the file on every access and never cached. A missing name raises
 `KeyError`; access after the file is closed raises `FileClosedError`.
 

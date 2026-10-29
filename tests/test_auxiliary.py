@@ -15,6 +15,7 @@ import pytest
 
 import ptir5
 from ptir5 import FileClosedError, InvalidMeasurementError
+from ptir5._reader import HDF5Reader
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -128,3 +129,22 @@ def test_completion_member_that_is_not_a_dataset_raises(
         m = f.measurements[0]
         with pytest.raises(InvalidMeasurementError, match="ComponentCompletion"):
             _ = m.component_completion
+
+
+def test_side_dataset_names_are_listed_once_per_measurement(
+    optir_image_stack_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    original = HDF5Reader.list_datasets
+
+    def counting(self: HDF5Reader, path: str) -> list[str]:
+        calls.append(path)
+        return original(self, path)
+
+    monkeypatch.setattr(HDF5Reader, "list_datasets", counting)
+    with ptir5.open(optir_image_stack_path) as f:
+        m = f.measurements[0]
+        _ = m.auxiliary["Wavenumber"]
+        _ = m.auxiliary["NumAverages"]
+        assert "TopFocus" in m.auxiliary and len(m.auxiliary) == 11
+    assert len(calls) == 1
