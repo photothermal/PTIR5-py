@@ -120,12 +120,20 @@ def _read_component_completion(
 ) -> np.ndarray[Any, np.dtype[np.bool_]] | None:
     """Decode the opt-in ``ComponentCompletion`` marker (spec §7.4.1).
 
-    Absent means completion is unknown (``None``). Only the value 1 reads as
-    complete; 0 and any corrupt value read as incomplete (fail closed).
+    Only a genuinely absent member means completion is unknown (``None``).
+    Only the value 1 reads as complete; 0 and any other stored value read as
+    incomplete (fail closed). A member that is not a uint8 dataset of the
+    expected shape raises ``InvalidMeasurementError``, where the C# SDK would
+    read every component as incomplete.
     """
     path = f"{hdf5_path}/ComponentCompletion"
-    if not reader.has_dataset(path):
+    if not reader.has_link(path):
         return None
+    if not reader.has_dataset(path):
+        raise InvalidMeasurementError(
+            f"ComponentCompletion must be a uint8 dataset; found a member that is not "
+            f"a readable dataset at {hdf5_path}"
+        )
     dtype = reader.dataset_dtype(path)
     shape = reader.dataset_shape(path)
     if dtype != np.uint8 or shape != expected_shape:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pytest
 
@@ -110,3 +111,20 @@ def test_side_dataset_and_scalar_attribute_with_one_name_stay_separate(
         m = f.measurements[0]
         assert m.metadata["NumAverages"] == 8
         np.testing.assert_array_equal(m.auxiliary["NumAverages"], [8, 7, 8])
+
+
+@pytest.mark.parametrize("member", ["group", "dangling soft link"])
+def test_completion_member_that_is_not_a_dataset_raises(
+    write_ptir: WritePtir, member: str
+) -> None:
+    path = write_ptir("OPTIRImageStack", np.zeros((3, 2, 2), np.float32))
+    with h5py.File(path, "a") as h5:
+        stack = h5["MEASUREMENTS/11111111-2222-3333-4444-555555555555"]
+        if member == "group":
+            stack.create_group("ComponentCompletion")
+        else:
+            stack["ComponentCompletion"] = h5py.SoftLink("/missing/ComponentCompletion")
+    with ptir5.open(path) as f:
+        m = f.measurements[0]
+        with pytest.raises(InvalidMeasurementError, match="ComponentCompletion"):
+            _ = m.component_completion

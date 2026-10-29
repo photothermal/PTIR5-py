@@ -132,7 +132,14 @@ class HDF5Reader:
         return dtype  # type: ignore[no-any-return]
 
     def has_dataset(self, path: str) -> bool:
-        return path in self._file() and isinstance(self._file()[path], h5py.Dataset)
+        # get() returns None for a dangling link, where indexing would raise KeyError.
+        return isinstance(self._file().get(path), h5py.Dataset)
+
+    def has_link(self, path: str) -> bool:
+        """True if *path* names a member of any kind, even a link whose target is missing."""
+        parent, _, name = path.rpartition("/")
+        group = self._file()[parent] if parent else self._file()
+        return group.get(name, getlink=True) is not None
 
     # -- GUID listing -------------------------------------------------------
 

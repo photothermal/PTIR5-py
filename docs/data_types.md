@@ -161,8 +161,10 @@ it:
   is incomplete. Any stored value other than 1 counts as incomplete (fail
   closed).
 
-A completion dataset with the wrong dtype or shape raises
-`InvalidMeasurementError`.
+Only a missing `ComponentCompletion` member counts as untracked. A member that is
+not a `uint8` dataset of the expected shape (a group, a dangling link, the wrong
+dtype or the wrong shape) raises `InvalidMeasurementError` rather than being
+treated as untracked.
 
 ## Normalization Settings
 

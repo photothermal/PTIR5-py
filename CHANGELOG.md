@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `HyperspectralCube` base class for `OPTIRHyperspectra`, `RamanHyperspectra` and `TimeDomainCube`
 - `FLPTIRImage.data_float32` and `FLPTIRImage.is_legacy` properties
 - `Measurement.auxiliary` (`AuxiliaryDatasets`) for the per-pixel and per-frame side datasets stored next to `DATA`, including `BackgroundScale`, `PumpWavelength` and `StokesWavelength`
-- `component_completion` on cubes and image stacks, decoding the opt-in `ComponentCompletion` marker (`None` when untracked; any value other than 1 reads as incomplete)
+- `component_completion` on cubes and image stacks, decoding the opt-in `ComponentCompletion` marker (`None` only when the marker is absent; any value other than 1 reads as incomplete; a marker that is not a `uint8` dataset of the expected shape raises `InvalidMeasurementError`)
 - Normalization settings: `NormalizeMode`, `NormalizeSpec`, `HyperspectralCube.normalize_spec` / `supported_normalize_modes` / `resolve_normalize_spec()`, and `GeneratedImage.normalize_spec` for per-band-image overrides (spec §13.4). Settings only; stored samples are never normalized
 - `Measurement.is_scratch` flags uncommitted batch outputs carrying the SDK `Scratch` marker; they are still listed
 
