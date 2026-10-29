@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING
 
 import h5py
@@ -12,7 +13,10 @@ import ptir5
 from ptir5 import InvalidMeasurementError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
+
+    WritePtir = Callable[..., Path]
 
 
 def _write_minimal_file(path: Path) -> None:
@@ -142,3 +146,49 @@ class TestInvalidTypeAttribute:
             pytest.raises(InvalidMeasurementError, match="Expected str"),
         ):
             _ = f.measurements
+
+
+def _guid_rows(*guids: str) -> np.ndarray:
+    return np.stack([np.frombuffer(uuid.UUID(g).bytes_le, np.uint8) for g in guids])
+
+
+class TestNonUtf8StringAttribute:
+    def test_invalid_bytes_are_replaced_not_fatal(self, write_ptir: WritePtir) -> None:
+        path = write_ptir("OPTIRSpectrum", np.zeros(3, np.float32),
+                          attrs={"XUnits": np.bytes_(b"\xb5s"), "Label": "ok"})
+        with ptir5.open(path) as f:
+            m = f.measurements[0]
+            assert m.metadata["XUnits"] == "\ufffds"
+            assert m.label == "ok"
+
+
+class TestUnresolvedTreeNodes:
+    LEAF = "11111111-2222-3333-4444-555555555555"     # write_ptir's measurement GUID
+    MISSING = "99999999-9999-9999-9999-999999999999"
+    FOLDER = "aaaaaaaa-0000-0000-0000-000000000001"
+
+    def test_node_row_without_tree_group_is_skipped(self, write_ptir: WritePtir) -> None:
+        path = write_ptir("OPTIRSpectrum", np.zeros(3, np.float32))
+        with h5py.File(path, "a") as h5:
+            tree = h5.create_group("TREE")
+            tree.create_dataset("NODES", data=_guid_rows(self.LEAF, self.MISSING))
+            tree.create_group(self.LEAF).attrs["TYPE"] = np.bytes_(b"OPTIRSpectrum")
+        with ptir5.open(path) as f:
+            assert f.tree is not None
+            assert [leaf.guid for leaf in f.tree.leaves] == [self.LEAF]
+
+    def test_folder_cycle_is_cut(self, write_ptir: WritePtir) -> None:
+        path = write_ptir("OPTIRSpectrum", np.zeros(3, np.float32))
+        with h5py.File(path, "a") as h5:
+            tree = h5.create_group("TREE")
+            tree.create_dataset("NODES", data=_guid_rows(self.FOLDER))
+            folder = tree.create_group(self.FOLDER)
+            folder.attrs["TYPE"] = np.bytes_(b"FOLDER")
+            folder.attrs["Label"] = np.bytes_(b"Loop")
+            folder.create_dataset("NODES", data=_guid_rows(self.FOLDER, self.LEAF))
+            tree.create_group(self.LEAF).attrs["TYPE"] = np.bytes_(b"OPTIRSpectrum")
+        with ptir5.open(path) as f:
+            assert f.tree is not None
+            (loop,) = f.tree.folders
+            assert loop.folders == ()
+            assert [leaf.guid for leaf in loop.leaves] == [self.LEAF]

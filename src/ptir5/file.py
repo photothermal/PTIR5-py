@@ -168,18 +168,32 @@ class PTIR5File:
         assert self._measurement_map is not None
 
         # Build lookup of TREE node info
-        root_child_ids = self._reader.read_tree_node_ids("TREE")
-        children = tuple(self._build_tree_node(guid) for guid in root_child_ids)
+        root_child_ids = self._resolvable_children("TREE", frozenset())
+        children = tuple(self._build_tree_node(guid, frozenset()) for guid in root_child_ids)
         self._tree = TreeRoot(children)
 
-    def _build_tree_node(self, guid: str) -> TreeFolder | TreeLeaf:
+    def _resolvable_children(self, tree_path: str, excluded: frozenset[str]) -> list[str]:
+        """Child GUIDs of a NODES list that can be built (spec §14.5).
+
+        Rows naming a GUID with no ``/TREE/{guid}`` group (e.g. left by an
+        interrupted attach or detach) and rows naming an excluded GUID (the
+        folder itself or an ancestor, which would form a cycle) are skipped.
+        """
+        return [
+            cid
+            for cid in self._reader.read_tree_node_ids(tree_path)
+            if cid not in excluded and self._reader.has_group(f"TREE/{cid}")
+        ]
+
+    def _build_tree_node(self, guid: str, ancestors: frozenset[str]) -> TreeFolder | TreeLeaf:
         tree_path = f"TREE/{guid}"
         type_str = self._reader.read_type(tree_path)
         label = self._reader.read_label(tree_path)
 
         if type_str == "FOLDER":
-            child_ids = self._reader.read_tree_node_ids(tree_path)
-            children = tuple(self._build_tree_node(cid) for cid in child_ids)
+            path_ids = ancestors | {guid}
+            child_ids = self._resolvable_children(tree_path, path_ids)
+            children = tuple(self._build_tree_node(cid, path_ids) for cid in child_ids)
             return TreeFolder(name=label, children=children)
         else:
             assert self._measurement_map is not None

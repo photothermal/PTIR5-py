@@ -17,11 +17,16 @@ def _convert_sequence(value: object) -> object:
 
 
 def _convert_value(val: Any) -> Any:
-    """Convert an HDF5 attribute value to a Python-native type."""
+    """Convert an HDF5 attribute value to a Python-native type.
+
+    Byte strings decode as UTF-8 (a superset of the ASCII the SDK also writes).
+    Undecodable bytes become U+FFFD rather than failing the whole metadata
+    load, as the C# SDK never throws on string decode.
+    """
     if isinstance(val, bytes):
-        return val.decode("utf-8")
+        return val.decode("utf-8", errors="replace")
     if isinstance(val, np.bytes_):
-        return bytes(val).decode("utf-8")
+        return bytes(val).decode("utf-8", errors="replace")
     if isinstance(val, np.generic):
         return _convert_value(val.item())
     if isinstance(val, np.ndarray):
