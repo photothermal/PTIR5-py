@@ -46,6 +46,7 @@ The main entry point for accessing PTIR5 file contents.
 | `data_shape` | `DataShape` | Fundamental data shape |
 | `label` | `str` | Shortcut for `metadata["Label"]` |
 | `metadata` | `MetadataView` | Dict-like attribute access |
+| `is_scratch` | `bool` | Uncommitted scratch output (non-empty `Scratch` attribute). PTIR Studio deletes scratch objects that the tree cannot reach when it opens the file; ptir5 still lists them |
 | `generated` | `tuple[Measurement, ...]` | Child GENERATED items |
 | `data` | `np.ndarray` | DATA dataset (read on each access) |
 | `auxiliary` | `AuxiliaryDatasets` | Side datasets next to DATA, keyed by name (each read on access) |

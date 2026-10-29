@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Measurement.auxiliary` (`AuxiliaryDatasets`) for the per-pixel and per-frame side datasets stored next to `DATA`, including `BackgroundScale`, `PumpWavelength` and `StokesWavelength`
 - `component_completion` on cubes and image stacks, decoding the opt-in `ComponentCompletion` marker (`None` when untracked; any value other than 1 reads as incomplete)
 - Normalization settings: `NormalizeMode`, `NormalizeSpec`, `HyperspectralCube.normalize_spec` / `supported_normalize_modes` / `resolve_normalize_spec()`, and `GeneratedImage.normalize_spec` for per-band-image overrides (spec §13.4). Settings only; stored samples are never normalized
+- `Measurement.is_scratch` flags uncommitted batch outputs carrying the SDK `Scratch` marker; they are still listed
 
 ### Changed
 - `FLPTIRImage` is now a marker mixin, like `FLPTIRImageStack`. Legacy rank-3 instances still satisfy `isinstance(m, ByteImage2D)`; rank-2 instances satisfy `isinstance(m, FloatImage2D)`; both satisfy `isinstance(m, FLPTIRImage)`

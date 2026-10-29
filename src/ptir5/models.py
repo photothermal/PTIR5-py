@@ -194,6 +194,16 @@ class Measurement:
         return self._metadata
 
     @property
+    def is_scratch(self) -> bool:
+        """True for an uncommitted scratch output (non-empty ``Scratch`` attribute).
+
+        PTIR Studio deletes scratch objects the document tree cannot reach when
+        it opens a file; ptir5 still lists them.
+        """
+        marker: Any = self._metadata.get("Scratch")
+        return isinstance(marker, str) and marker != ""
+
+    @property
     def generated(self) -> tuple[Measurement, ...]:
         return self._generated
 
