@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `FLPTIRImage` now reads the canonical rank-2 layout (`float32`, `uint16` or `uint8`) that current PTIR Studio versions write. Previously these files were typed as byte images and `bytes_per_pixel` raised `IndexError`. `data_float32` returns `(H, W)` float32 for every layout; unsupported layouts raise `InvalidMeasurementError`
 - Non-UTF-8 bytes in a string attribute no longer abort metadata loading; they decode as U+FFFD
+- `write_image_stack_result` no longer copies the source's noise-frame link (`NoiseFrameID`, `NoiseFrameCorrectionAppliedAtWrite`, `NoiseFrameCorrectionDisplayEnabled`) onto the derived stack. Inheriting it made PTIR Studio add the source noise frame onto derived values when display correction was off
 - Tree `NODES` rows naming a GUID with no `/TREE` group (as an interrupted attach or detach can leave) and folder cycles are skipped instead of raising `KeyError` / `RecursionError` (spec §14.5)
 
 ## [0.1.1] - 2026-06-12

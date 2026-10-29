@@ -220,6 +220,14 @@ def _set_utf8_attribute(target: h5py.Group | h5py.File, name: str, value: str) -
     target.attrs.create(name, encoded, dtype=h5py.string_dtype("utf-8", max(1, len(encoded))))
 
 
+# PTIR Studio adds the linked noise frame back onto stored pixels when correction
+# was applied at write and display correction is off; derived values are already
+# computed from the corrected pixels, so the link must not follow them.
+_NOISE_FRAME_ATTRIBUTES = frozenset(
+    {"NoiseFrameID", "NoiseFrameCorrectionAppliedAtWrite", "NoiseFrameCorrectionDisplayEnabled"}
+)
+
+
 def append_stack_result(
     path: str | Path,
     source_guid: str,
@@ -297,6 +305,8 @@ def append_stack_result(
             raise ValueError("Source requires an existing document tree with TREE/NODES")
         result = document["MEASUREMENTS"].create_group(result_guid)
         _copy_attributes(source, result)
+        for name in _NOISE_FRAME_ATTRIBUTES & set(result.attrs):
+            del result.attrs[name]
         for name in {"Channel", "Palette"} & set(source):
             document.copy(source[name], result, name=name)
         result.create_dataset(
