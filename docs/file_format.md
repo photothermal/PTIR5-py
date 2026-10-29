@@ -39,12 +39,22 @@ Root (/)
 
 | Measurement Type | Dimensions | HDF5 Type |
 |-----------------|------------|-----------|
-| Spectra | (length,) | IEEE_F32LE |
+| Spectra and time-domain bursts | (length,) | IEEE_F32LE |
 | Float images | (height, width) | IEEE_F32LE |
 | Byte images | (height, width, BPP) | STD_U8LE |
-| Hyperspectral | (points, height, width) | IEEE_F32LE |
+| FL-PTIR images | (height, width) | IEEE_F32LE, STD_U16LE or STD_U8LE |
+| FL-PTIR images (legacy) | (height, width, 4) | STD_U8LE (float32 bytes) |
+| Hyperspectral and time-domain cubes | (points, height, width) | IEEE_F32LE |
 | Byte image stacks | (images, height, width, BPP) | STD_U8LE |
-| Float image stacks | (images, height, width) | IEEE_F32LE |
+| Float image stacks (incl. FL-PTIR) | (images, height, width) | IEEE_F32LE |
+| FL-PTIR image stacks (legacy) | (images, height, width, 4) | STD_U8LE (float32 bytes) |
+
+## Side Datasets
+
+Per-pixel (cubes, `(height, width)`) and per-frame (stacks, `(images,)`) arrays
+such as `Wavenumber`, `NumAverages`, `TopFocus` and `ComponentCompletion` are
+stored as datasets next to `DATA`. See
+[Data Types — Side Datasets](data_types.md#side-datasets).
 
 ## TREE NODES Encoding
 

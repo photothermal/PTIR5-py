@@ -207,6 +207,35 @@ it, normalized. The setting is stored in two attributes, `NormalizeMode` and
 - `Wavenumber` — Wavenumber at which image was collected (cm-1)
 - `PixelFormat` — Pixel format for byte images
 
+### Acquisition Attributes Added in PTIR Studio 5.1+
+
+All of these are plain attributes, read through `m.metadata[...]`:
+
+| Key | Type | Units / values | Found on |
+|-----|------|----------------|----------|
+| `AutoFocusMode` | string | auto-focus mode name | O-PTIR, PT-SRS and FL-PTIR image stacks |
+| `AutoFocusWavenumber` | float32 | cm⁻¹ | O-PTIR, PT-SRS and FL-PTIR image stacks |
+| `NumAverages` | int32 | count | Photothermal scan images |
+| `RepairedPointCount` | int32 | pixels synthesized to repair missing scan lines | Photothermal scan images |
+| `PumpWavelength`, `StokesWavelength` | float32 | nm (informational) | PT-SRS spectra and images (per-frame datasets on PT-SRS stacks) |
+| `AomModulationFrequency` | float32 | Hz (informational) | PT-SRS spectra, images and stacks |
+| `AomModulationDutyCycle` | float32 | % (informational) | PT-SRS spectra, images and stacks |
+| `BandIntegrationMode` | string | `TotalArea` or `BaselineArea` | Generated band images |
+| `NormalizeMode`, `NormalizeWavenumber` | string, float32 | see [Normalization Settings](#normalization-settings) | Hyperspectral cubes, band images |
+| `FrameRate` | float32 | Hz (widefield camera) | FL-PTIR images and stacks |
+| `SampleRate` | float64 | Hz | Time-domain bursts and cubes |
+| `BurstBackend`, `BurstInputSource` | string | capture backend / input description | Time-domain bursts and cubes |
+| `BurstOverflow` | byte | `0`/`1` (data-loss fault) | Time-domain bursts and cubes |
+| `NoiseFrameID` | string | GUID of the stored noise-frame image | Photothermal scan images and float image stacks |
+| `NoiseFrameCorrectionAppliedAtWrite` | byte | `0`/`1`: stored pixels already have the noise frame subtracted | Photothermal scan images and float image stacks |
+| `NoiseFrameCorrectionDisplayEnabled` | byte | `0`/`1`: PTIR Studio display preference | Photothermal scan images and float image stacks |
+| `Scratch` | string | non-empty marks an uncommitted output (see `is_scratch`) | Any measurement |
+| `ParticleData.ChemIDResult` | string | opaque application-defined envelope, at most 16 KiB UTF-8 | Measurements with particle data |
+
+When `NoiseFrameCorrectionAppliedAtWrite` is `1`, the pixels `data` returns
+already have the noise frame subtracted. PTIR Studio adds the frame back only
+for display, when display correction is off. ptir5 returns the stored pixels.
+
 ### Channel Sub-group (`Channel.*`)
 - `Channel.Units` — Data units (e.g., "mV")
 - `Channel.DataSignal` — Signal type

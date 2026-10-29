@@ -57,7 +57,9 @@ with ptir5.open("sample.ptir") as f:
 
 - **Read-only access** to all PTIR5 measurement types as numpy arrays
 - **Derived O-PTIR stack output** to a new document, preserving all source measurements
-- **16 measurement types**: O-PTIR spectra/images/hyperspectra, Raman spectra/hyperspectra, camera images, fluorescence images, FL-PTIR images, PTSRS spectra/images, and image stacks
+- **18 measurement types**: O-PTIR spectra/images/hyperspectra, Raman spectra/hyperspectra, time-domain bursts/cubes, camera images, fluorescence images, FL-PTIR images, PTSRS spectra/images, and image stacks
+- **Side datasets** (per-frame wavenumbers, per-pixel averages, completion markers) via `m.auxiliary`
+- **Normalization settings** for hyperspectral cubes and band images (reported, never applied)
 - **Hierarchical tree navigation** matching PTIR Studio's document structure
 - **Flat measurement enumeration** with type filtering and GUID lookup
 - **Background spectra** access
@@ -73,24 +75,27 @@ with ptir5.open("sample.ptir") as f:
 | Raman Spectrum | `RamanSpectrum` | `(points,)` | float32 |
 | Generated Spectrum | `GeneratedSpectrum` | `(points,)` | float32 |
 | PTSRS Spectrum | `PTSRSSpectrum` | `(points,)` | float32 |
+| Time-Domain Burst | `TimeDomainBurst` | `(samples,)` | float32 |
 | O-PTIR Image | `OPTIRImage` | `(height, width)` | float32 |
 | Generated Image | `GeneratedImage` | `(height, width)` | float32 |
 | PTSRS Image | `PTSRSImage` | `(height, width)` | float32 |
 | Camera Image | `CameraImage` | `(height, width, bpp)` | uint8 |
 | Fluorescence Image | `FluorescenceImage` | `(height, width, bpp)` | uint8 |
-| FL-PTIR Image | `FLPTIRImage` | `(height, width, bpp)` | uint8 |
+| FL-PTIR Image | `FLPTIRImage` | `(height, width)` | float32, uint16 or uint8 |
+| FL-PTIR Image (legacy) | `FLPTIRImage` | `(height, width, 4)` ¹ | uint8 |
 | O-PTIR Hyperspectra | `OPTIRHyperspectra` | `(points, height, width)` | float32 |
 | Raman Hyperspectra | `RamanHyperspectra` | `(points, height, width)` | float32 |
+| Time-Domain Cube | `TimeDomainCube` | `(samples, height, width)` | float32 |
 | O-PTIR Image Stack | `OPTIRImageStack` | `(images, height, width)` | float32 |
 | PTSRS Image Stack | `PTSRSImageStack` | `(images, height, width)` | float32 |
 | Camera Image Stack | `CameraImageStack` | `(images, height, width, bpp)` | uint8 |
 | FL-PTIR Image Stack (legacy) | `FLPTIRImageStack` | `(images, height, width, 4)` ¹ | uint8 |
 | FL-PTIR Image Stack | `FLPTIRImageStack` | `(images, height, width)` | float32 |
 
-¹ Legacy rank-4 storage encodes one `float32` per pixel as four `uint8` bytes.
-Use `m.read_image(i)` or `m.data_float32` to get canonical `float32` imagery
-for either storage format; `m.data` returns the raw on-disk dataset. See
-[`docs/data_types.md`](docs/data_types.md#flptirimagestack--dual-format) for
+¹ Legacy FL-PTIR storage encodes one `float32` per pixel as four `uint8` bytes.
+Use `m.data_float32` (and `m.read_image(i)` on stacks) to get canonical `float32`
+imagery for any storage format; `m.data` returns the raw on-disk dataset. See
+[`docs/data_types.md`](docs/data_types.md#flptirimage--dual-format) for
 details.
 
 ## Derived output
