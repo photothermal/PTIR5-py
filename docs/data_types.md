@@ -213,9 +213,9 @@ All of these are plain attributes, read through `m.metadata[...]`:
 
 | Key | Type | Units / values | Found on |
 |-----|------|----------------|----------|
-| `AutoFocusMode` | string | auto-focus mode name | O-PTIR, PT-SRS and FL-PTIR image stacks |
-| `AutoFocusWavenumber` | float32 | cm⁻¹ | O-PTIR, PT-SRS and FL-PTIR image stacks |
-| `NumAverages` | int32 | count | Photothermal scan images |
+| `AutoFocusMode` | string | auto-focus mode name | O-PTIR and PT-SRS spectra, O-PTIR hyperspectra, and O-PTIR, PT-SRS and FL-PTIR image stacks |
+| `AutoFocusWavenumber` | float32 | cm⁻¹ | Same objects as `AutoFocusMode` |
+| `NumAverages` | int32 | count | Photothermal scan images and FL-PTIR images (cubes and stacks store it as a side dataset) |
 | `RepairedPointCount` | int32 | pixels synthesized to repair missing scan lines | Photothermal scan images |
 | `PumpWavelength`, `StokesWavelength` | float32 | nm (informational) | PT-SRS spectra and images (per-frame datasets on PT-SRS stacks) |
 | `AomModulationFrequency` | float32 | Hz (informational) | PT-SRS spectra, images and stacks |
