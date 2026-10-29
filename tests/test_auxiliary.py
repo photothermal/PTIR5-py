@@ -98,3 +98,15 @@ def test_malformed_completion_raises(write_ptir: WritePtir, completion: np.ndarr
         m = f.measurements[0]
         with pytest.raises(InvalidMeasurementError):
             _ = m.component_completion
+
+
+def test_side_dataset_and_scalar_attribute_with_one_name_stay_separate(
+    write_ptir: WritePtir,
+) -> None:
+    path = write_ptir("OPTIRImageStack", np.zeros((3, 2, 2), np.float32),
+                      attrs={"NumAverages": np.int32(8)},
+                      datasets={"NumAverages": np.array([8, 7, 8], np.int32)})
+    with ptir5.open(path) as f:
+        m = f.measurements[0]
+        assert m.metadata["NumAverages"] == 8
+        np.testing.assert_array_equal(m.auxiliary["NumAverages"], [8, 7, 8])

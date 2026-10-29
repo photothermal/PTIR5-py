@@ -136,6 +136,10 @@ wavenumbers = stack.auxiliary["Wavenumber"]      # (images,) float32
 averages = cube.auxiliary["NumAverages"]         # (height, width) int32
 ```
 
+A side dataset can share its name with a scalar attribute on the same group. For example,
+`m.auxiliary["NumAverages"]` holds the per-pixel or per-frame counts, while
+`m.metadata["NumAverages"]` holds the object-level value. Both may be present.
+
 Which datasets exist depends on the acquisition:
 
 | Owner | Shape | Datasets |
@@ -215,7 +219,7 @@ All of these are plain attributes, read through `m.metadata[...]`:
 |-----|------|----------------|----------|
 | `AutoFocusMode` | string | auto-focus mode name | O-PTIR and PT-SRS spectra, O-PTIR hyperspectra, and O-PTIR, PT-SRS and FL-PTIR image stacks |
 | `AutoFocusWavenumber` | float32 | cm⁻¹ | Same objects as `AutoFocusMode` |
-| `NumAverages` | int32 | count | Photothermal scan images and FL-PTIR images (cubes and stacks store it as a side dataset) |
+| `NumAverages` | int32 | count | Photothermal scan images and FL-PTIR images. Spectra, cubes and stacks carry the same scalar attribute; cubes and stacks can also store per-component counts in a `NumAverages` side dataset. The two are independent (see [Side Datasets](#side-datasets)) |
 | `RepairedPointCount` | int32 | pixels synthesized to repair missing scan lines | Photothermal scan images |
 | `PumpWavelength`, `StokesWavelength` | float32 | nm (informational) | PT-SRS spectra and images (per-frame datasets on PT-SRS stacks) |
 | `AomModulationFrequency` | float32 | Hz (informational) | PT-SRS spectra, images and stacks |
