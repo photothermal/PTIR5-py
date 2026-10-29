@@ -563,9 +563,12 @@ def _reinterpret_legacy_flptir_bytes(
     )
 
 
-# Rank-2 FLPTIRImage dtypes the SDK accepts: Gray32Float, Gray16 and Gray8.
-_FLPTIR_IMAGE_RANK2_DTYPES = frozenset({np.dtype(np.float32), np.dtype(np.uint16),
-                                        np.dtype(np.uint8)})
+# Rank-2 FLPTIRImage dtypes the SDK accepts, and the pixel format each implies.
+_FLPTIR_IMAGE_RANK2_FORMATS = {
+    np.dtype(np.float32): PixelFormat.Gray32Float,
+    np.dtype(np.uint16): PixelFormat.Gray16,
+    np.dtype(np.uint8): PixelFormat.Gray8,
+}
 
 
 class FLPTIRImage:
@@ -621,6 +624,18 @@ class _Rank2FLPTIRImage(FLPTIRImage, FloatImage2D):
     def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
         raw = self._reader.read_dataset(f"{self._hdf5_path}/DATA")
         return raw.astype(np.float32, copy=False)
+
+    @property
+    def pixel_format(self) -> PixelFormat | str:
+        """The format the stored dtype implies: Gray32Float, Gray16 or Gray8.
+
+        As in the C# SDK, the dtype decides when ``PixelFormat`` is missing and
+        for integer storage. The dtype also wins over a stored name that
+        contradicts float32 pixels, so the result always describes ``data``.
+        """
+        return _FLPTIR_IMAGE_RANK2_FORMATS[
+            self._reader.dataset_dtype(f"{self._hdf5_path}/DATA")
+        ]
 
 
 class FLPTIRImageStack:
@@ -779,7 +794,7 @@ def _flptir_image_class(
         return _LegacyFLPTIRImage, DataShape.BYTE_IMAGE_2D
     if ds_rank == 2:
         ds_dtype = reader.dataset_dtype(data_path)
-        if ds_dtype not in _FLPTIR_IMAGE_RANK2_DTYPES:
+        if ds_dtype not in _FLPTIR_IMAGE_RANK2_FORMATS:
             raise InvalidMeasurementError(
                 f"FLPTIRImage rank-2 DATA must be float32, uint16 or uint8; got dtype "
                 f"{ds_dtype} at {hdf5_path}"

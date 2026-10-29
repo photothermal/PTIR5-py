@@ -192,7 +192,7 @@ concrete classes chosen by storage format:
 |----------|------|-------------|
 | `is_legacy` | `bool` | `True` for rank-3 byte storage, `False` for rank-2 |
 | `data_float32` | `np.ndarray` | Image as `(height, width)` `float32` for either format |
-| `pixel_format` | `PixelFormat \| str` | Stored `PixelFormat` attribute |
+| `pixel_format` | `PixelFormat \| str` | Rank-2: the format the dtype implies (`Gray32Float`, `Gray16`, `Gray8`); legacy: the stored `PixelFormat` attribute |
 | `data` | `np.ndarray` | Unmodified on-disk dataset |
 
 ## FLPTIRImageStack

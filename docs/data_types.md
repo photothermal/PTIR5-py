@@ -93,7 +93,9 @@ Single FL-PTIR images also have two supported on-disk layouts. Both produce
 | Legacy rank-3  | `(H, W, 4)` | `uint8` (each 4-byte pixel encodes one `float32`) | `ByteImage2D` | `True` |
 
 As in the C# SDK, the dataset dtype decides the rank-2 pixel format.
-`pixel_format` reports the stored `PixelFormat` attribute. `data` returns the
+`pixel_format` reports it (`Gray32Float`, `Gray16` or `Gray8`) even when the
+`PixelFormat` attribute is missing or contradicts the dtype. Legacy images report
+the stored `PixelFormat` attribute. `data` returns the
 unmodified on-disk dataset. Any other rank or rank-2 dtype raises
 `InvalidMeasurementError` when the file's measurements are loaded; a legacy
 rank-3 dataset whose trailing dimension is not 4 raises when it is read.

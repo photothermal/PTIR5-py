@@ -72,3 +72,19 @@ def test_malformed_legacy_bytes_raise_on_read(write_ptir: WritePtir) -> None:
         m = f.measurements[0]
         with pytest.raises(InvalidMeasurementError):
             _ = m.data_float32
+
+
+@pytest.mark.parametrize(("dtype", "stored", "expected"), [
+    (np.float32, None, PixelFormat.Gray32Float),
+    (np.uint16, None, PixelFormat.Gray16),
+    (np.uint8, None, PixelFormat.Gray8),
+    # As in the SDK, integer storage decides over a contradicting stored name.
+    (np.uint16, "Gray8", PixelFormat.Gray16),
+])
+def test_rank2_pixel_format_follows_the_dtype(
+    write_ptir: WritePtir, dtype: type, stored: str | None, expected: PixelFormat
+) -> None:
+    attrs = {} if stored is None else {"PixelFormat": stored}
+    path = write_ptir("FLPTIRImage", np.zeros((2, 3), dtype=dtype), attrs=attrs)
+    with ptir5.open(path) as f:
+        assert f.measurements[0].pixel_format is expected
