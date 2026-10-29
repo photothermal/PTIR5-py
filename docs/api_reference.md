@@ -46,8 +46,17 @@ The main entry point for accessing PTIR5 file contents.
 | `data_shape` | `DataShape` | Fundamental data shape |
 | `label` | `str` | Shortcut for `metadata["Label"]` |
 | `metadata` | `MetadataView` | Dict-like attribute access |
+| `is_scratch` | `bool` | Uncommitted scratch output (non-empty `Scratch` attribute). PTIR Studio deletes scratch objects that the tree cannot reach when it opens the file; ptir5 still lists them |
 | `generated` | `tuple[Measurement, ...]` | Child GENERATED items |
 | `data` | `np.ndarray` | DATA dataset (read on each access) |
+| `auxiliary` | `AuxiliaryDatasets` | Side datasets next to DATA, keyed by name (each read on access) |
+
+## AuxiliaryDatasets
+
+Read-only `Mapping[str, np.ndarray]` over the sibling datasets of a
+measurement, excluding `DATA`. The name list is read once per measurement; values are read
+from the file on every access and never cached. A missing name raises
+`KeyError`; access after the file is closed raises `FileClosedError`.
 
 ## FloatSpectrum1D
 
@@ -100,6 +109,38 @@ Inherits from `Measurement`. 3D float cube `(points, height, width)`.
 | `x_values` | `np.ndarray` | Computed x-axis array |
 | `read_spectrum(x, y)` | `np.ndarray` | Spectrum at pixel (x, y) |
 | `read_image(index)` | `np.ndarray` | Image at spectral index |
+| `component_completion` | `np.ndarray[bool] \| None` | Completion per pixel `(height, width)`, or per frame for `OPTIRImageStack`/`PTSRSImageStack`; `None` when untracked |
+
+## HyperspectralCube
+
+Inherits from `FloatHypercube3D`. Base for cubes holding one spectrum or
+waveform per pixel: `OPTIRHyperspectra`, `RamanHyperspectra` and
+`TimeDomainCube`. `OPTIRImageStack` and `PTSRSImageStack` are
+`FloatHypercube3D` but not `HyperspectralCube`.
+
+| Property / Method | Type | Description |
+|----------|------|-------------|
+| `supported_normalize_modes` | `frozenset[NormalizeMode]` | Class attribute; modes this cube type renders |
+| `normalize_spec` | `NormalizeSpec` | The cube's stored setting (missing, unknown or unsupported mode reads `Off`) |
+| `resolve_normalize_spec(image=None)` | `NormalizeSpec` | Effective setting for a band image (spec §13.4), or the cube's own |
+
+`GeneratedImage.normalize_spec` (`NormalizeSpec | None`) is a band image's own
+setting; `None` means it follows its cube.
+
+`NormalizeSpec` is a frozen dataclass with fields `mode: NormalizeMode` and
+`reference: float | None`. These members report settings only; ptir5 never
+normalizes data.
+
+## Time-domain types
+
+- `TimeDomainBurst` (`FloatSpectrum1D`): one waveform captured at a single X/Y
+  location. `x_values` is time in µs (`XStart` = capture delay, `XIncrement` =
+  1/sample rate).
+- `TimeDomainCube` (`HyperspectralCube`): one waveform per pixel, stored as
+  `(samples, height, width)` `float32`.
+
+Capture provenance is available through `metadata`: `SampleRate` (Hz),
+`BurstBackend`, `BurstInputSource`, `BurstOverflow` (byte `0`/`1`).
 
 ## ImageStack3D
 
@@ -116,6 +157,7 @@ subclass.
 | `pixel_format` | `PixelFormat \| str` | Pixel format enum |
 | `image_width_um` | `float` | Physical width in microns |
 | `image_height_um` | `float` | Physical height in microns |
+| `component_completion` | `np.ndarray[bool] \| None` | Completion per frame `(num_images,)`; `None` when untracked |
 
 ## ByteImageStack3D
 
@@ -135,6 +177,23 @@ Inherits from `ImageStack3D`. Float image stack `(images, height, width)` of
 | Property / Method | Type | Description |
 |----------|------|-------------|
 | `read_image(index)` | `np.ndarray` | Image at stack index, shape `(height, width)` `float32` |
+
+## FLPTIRImage
+
+Marker mixin for single widefield FL-PTIR images. Instances are one of two
+concrete classes chosen by storage format:
+
+- Rank-2 `(H, W)` storage (`float32`, `uint16` or `uint8`) → also
+  `FloatImage2D`. Current writers emit this layout.
+- Legacy rank-3 `(H, W, 4) uint8` storage → also `ByteImage2D`. Each 4-byte
+  pixel encodes one `float32` value.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `is_legacy` | `bool` | `True` for rank-3 byte storage, `False` for rank-2 |
+| `data_float32` | `np.ndarray` | Image as `(height, width)` `float32` for either format |
+| `pixel_format` | `PixelFormat \| str` | Camera format. Rank-2 `float32`: the stored `PixelFormat` if it names a known format, else `Gray32Float`; rank-2 `uint16`/`uint8`: `Gray16`/`Gray8`; legacy: the stored attribute |
+| `data` | `np.ndarray` | Unmodified on-disk dataset |
 
 ## FLPTIRImageStack
 
@@ -206,7 +265,12 @@ Attributes from sub-groups (Channel, ParticleData, ROIData, Palette) are prefixe
 `OPTIRSpectrum`, `RamanSpectrum`, `GeneratedSpectrum`, `PTSRSSpectrum`,
 `OPTIRImage`, `GeneratedImage`, `PTSRSImage`, `CameraImage`,
 `FluorescenceImage`, `FLPTIRImage`, `OPTIRHyperspectra`, `RamanHyperspectra`,
-`OPTIRImageStack`, `CameraImageStack`, `FLPTIRImageStack`, `PTSRSImageStack`
+`OPTIRImageStack`, `CameraImageStack`, `FLPTIRImageStack`, `PTSRSImageStack`,
+`TimeDomainBurst`, `TimeDomainCube`
+
+### NormalizeMode (StrEnum)
+
+`Off`, `Peak`, `Wavenumber`, `Time`, `Offset`
 
 ### DataShape (Enum)
 

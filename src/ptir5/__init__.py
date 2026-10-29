@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ptir5._version import __version__
-from ptir5.enums import DataShape, MeasurementType, PixelFormat
+from ptir5.enums import DataShape, MeasurementType, NormalizeMode, PixelFormat
 from ptir5.exceptions import (
     FileClosedError,
     InvalidMeasurementError,
@@ -15,6 +15,7 @@ from ptir5.exceptions import (
 from ptir5.file import PTIR5File
 from ptir5.metadata import MetadataView
 from ptir5.models import (
+    AuxiliaryDatasets,
     ByteImage2D,
     ByteImageStack3D,
     CameraImage,
@@ -28,8 +29,10 @@ from ptir5.models import (
     FluorescenceImage,
     GeneratedImage,
     GeneratedSpectrum,
+    HyperspectralCube,
     ImageStack3D,
     Measurement,
+    NormalizeSpec,
     OPTIRHyperspectra,
     OPTIRImage,
     OPTIRImageStack,
@@ -39,6 +42,8 @@ from ptir5.models import (
     PTSRSSpectrum,
     RamanHyperspectra,
     RamanSpectrum,
+    TimeDomainBurst,
+    TimeDomainCube,
 )
 from ptir5.tree import TreeFolder, TreeLeaf, TreeRoot
 from ptir5.writer import write_image_stack_result
@@ -68,6 +73,7 @@ __all__ = [
     # Enums
     "DataShape",
     "MeasurementType",
+    "NormalizeMode",
     "PixelFormat",
     # Exceptions
     "FileClosedError",
@@ -76,10 +82,13 @@ __all__ = [
     "PTIR5Error",
     # Models
     "Measurement",
+    "AuxiliaryDatasets",
+    "NormalizeSpec",
     "FloatSpectrum1D",
     "FloatImage2D",
     "ByteImage2D",
     "FloatHypercube3D",
+    "HyperspectralCube",
     "ImageStack3D",
     "ByteImageStack3D",
     "FloatImageStack3D",
@@ -99,6 +108,8 @@ __all__ = [
     "CameraImageStack",
     "FLPTIRImageStack",
     "PTSRSImageStack",
+    "TimeDomainBurst",
+    "TimeDomainCube",
     # Metadata
     "MetadataView",
     # Tree

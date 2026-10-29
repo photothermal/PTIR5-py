@@ -50,6 +50,11 @@ class HDF5Reader:
         grp = self._file()[path]
         return [k for k in grp if isinstance(grp[k], h5py.Group)]
 
+    def list_datasets(self, path: str) -> list[str]:
+        """Return names of datasets (not sub-groups) directly under *path*."""
+        grp = self._file()[path]
+        return [k for k in grp if isinstance(grp[k], h5py.Dataset)]
+
     # -- Attribute reading --------------------------------------------------
 
     def read_type(self, path: str) -> str:
@@ -61,6 +66,10 @@ class HDF5Reader:
                 f"Expected str for TYPE attribute, got {type(val).__name__} at {path}"
             )
         return val
+
+    def has_attribute(self, path: str, name: str) -> bool:
+        """True if the object at *path* has an attribute called *name*."""
+        return name in self._file()[path].attrs
 
     def read_label(self, path: str) -> str:
         """Read the Label attribute, returning '' if missing."""
@@ -127,7 +136,14 @@ class HDF5Reader:
         return dtype  # type: ignore[no-any-return]
 
     def has_dataset(self, path: str) -> bool:
-        return path in self._file() and isinstance(self._file()[path], h5py.Dataset)
+        # get() returns None for a dangling link, where indexing would raise KeyError.
+        return isinstance(self._file().get(path), h5py.Dataset)
+
+    def has_link(self, path: str) -> bool:
+        """True if *path* names a member of any kind, even a link whose target is missing."""
+        parent, _, name = path.rpartition("/")
+        group = self._file()[parent] if parent else self._file()
+        return group.get(name, getlink=True) is not None
 
     # -- GUID listing -------------------------------------------------------
 
@@ -215,6 +231,14 @@ def _set_utf8_attribute(target: h5py.Group | h5py.File, name: str, value: str) -
     target.attrs.create(name, encoded, dtype=h5py.string_dtype("utf-8", max(1, len(encoded))))
 
 
+# PTIR Studio adds the linked noise frame back onto stored pixels when correction
+# was applied at write and display correction is off; derived values are already
+# computed from the corrected pixels, so the link must not follow them.
+_NOISE_FRAME_ATTRIBUTES = frozenset(
+    {"NoiseFrameID", "NoiseFrameCorrectionAppliedAtWrite", "NoiseFrameCorrectionDisplayEnabled"}
+)
+
+
 def append_stack_result(
     path: str | Path,
     source_guid: str,
@@ -292,6 +316,8 @@ def append_stack_result(
             raise ValueError("Source requires an existing document tree with TREE/NODES")
         result = document["MEASUREMENTS"].create_group(result_guid)
         _copy_attributes(source, result)
+        for name in _NOISE_FRAME_ATTRIBUTES & set(result.attrs):
+            del result.attrs[name]
         for name in {"Channel", "Palette"} & set(source):
             document.copy(source[name], result, name=name)
         result.create_dataset(

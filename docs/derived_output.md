@@ -48,8 +48,15 @@ Numeric coordinate/value round trips alone do not detect that interoperability b
 The derived stack has recomputed global/per-frame minima and maxima, automatic
 palette ranges, and no copied generated children. Unknown stack child layouts are
 rejected instead of copying potentially stale caches. Optional component-completion
-values mark all result frames complete. Original noise-correction metadata is
-retained; this API applies no correction, scaling or normalization.
+values mark all result frames complete. This API applies no correction, scaling
+or normalization: result values are whatever the caller computed from the stored
+source pixels, which already have noise-frame subtraction baked in when the source
+recorded `NoiseFrameCorrectionAppliedAtWrite`. The noise-frame link
+(`NoiseFrameID`, `NoiseFrameCorrectionAppliedAtWrite`,
+`NoiseFrameCorrectionDisplayEnabled`) is therefore not inherited. Otherwise PTIR
+Studio would add the source noise frame back onto the derived values whenever
+display correction is turned off. The retained source measurement keeps those
+attributes.
 
 Writing uses a private temporary file in the existing output directory, checks
 its source checksum, and reopens the result to verify exact values, coordinates

@@ -579,3 +579,22 @@ def test_publish_race_preserves_other_output(
         write(source, output)
     assert output.read_bytes() == b"other process"
     assert not list(tmp_path.glob(".ptir5-result-*"))
+
+
+NOISE_FRAME_KEYS = (
+    "NoiseFrameID", "NoiseFrameCorrectionAppliedAtWrite", "NoiseFrameCorrectionDisplayEnabled",
+)
+
+
+def test_noise_frame_link_is_not_inherited(source: Path, tmp_path: Path) -> None:
+    with h5py.File(source, "r+") as file:
+        stack = file[f"MEASUREMENTS/{GUID}"]
+        stack.attrs["NoiseFrameID"] = np.bytes_(b"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+        stack.attrs["NoiseFrameCorrectionAppliedAtWrite"] = np.array([1], np.uint8)
+        stack.attrs["NoiseFrameCorrectionDisplayEnabled"] = np.array([0], np.uint8)
+    new_guid = write(source, tmp_path / "out.ptir")
+    with h5py.File(tmp_path / "out.ptir", "r") as file:
+        result, kept = file[f"MEASUREMENTS/{new_guid}"].attrs, file[f"MEASUREMENTS/{GUID}"].attrs
+        for name in NOISE_FRAME_KEYS:
+            assert name not in result
+            assert name in kept

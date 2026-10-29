@@ -12,6 +12,27 @@ document is the lightweight inbox before something becomes a tracked issue.
   spectra in one HDF5 call rather than N round-trips.
 - Index ranges on stacks — read a contiguous range of frames in one call.
 
+## Display-time corrections
+
+ptir5 returns stored samples. PTIR Studio applies several corrections only for
+display, and optional helpers could reproduce them:
+
+- Hyperspectral normalization math for the settings ptir5 already reports
+  (`Peak`, `Wavenumber`, `Time`, `Offset`, including the NaN-gap reference
+  fallback), per spec §13.4.
+- PT-SRS power correction (divide by enabled `PumpPower` / `StokesPower`
+  factors), per spec §6.4.
+- Noise-frame add-back for images whose stored pixels had the noise frame
+  subtracted at write.
+- FL-PTIR per-frame background scale from the referenced background spectrum,
+  per spec §9.6.
+
+## Spectrum extraction from FL-PTIR stacks
+
+- `read_spectrum(x, y)` and ROI bulk reads on FL-PTIR image stacks. Bulk reads
+  must return pixel-major (interlaced) order for both storage formats; the C#
+  SDK fixed exactly this bug for legacy rank-4 stacks (PS-3573).
+
 ## CLI tool
 
 - `ptir5 inspect <file>` — print a structured summary of a `.ptir` file

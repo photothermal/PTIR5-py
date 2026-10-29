@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `TimeDomainBurst` and `TimeDomainCube` measurement types (PSC.PTIR5.SDK time-domain capture); previously these loaded as generic `Measurement`
+- `HyperspectralCube` base class for `OPTIRHyperspectra`, `RamanHyperspectra` and `TimeDomainCube`
+- `FLPTIRImage.data_float32` and `FLPTIRImage.is_legacy` properties
+- `Measurement.auxiliary` (`AuxiliaryDatasets`) for the per-pixel and per-frame side datasets stored next to `DATA`, including `BackgroundScale`, `PumpWavelength` and `StokesWavelength`
+- `component_completion` on cubes and image stacks, decoding the opt-in `ComponentCompletion` marker (`None` only when the marker is absent; any value other than 1 reads as incomplete; a marker that is not a `uint8` dataset of the expected shape raises `InvalidMeasurementError`)
+- Normalization settings: `NormalizeMode`, `NormalizeSpec`, `HyperspectralCube.normalize_spec` / `supported_normalize_modes` / `resolve_normalize_spec()`, and `GeneratedImage.normalize_spec` for per-band-image overrides (spec §13.4). Settings only; stored samples are never normalized
+- `Measurement.is_scratch` flags uncommitted batch outputs carrying the SDK `Scratch` marker; they are still listed
+
+### Changed
+- `FLPTIRImage` is now a marker mixin, like `FLPTIRImageStack`. Legacy rank-3 instances still satisfy `isinstance(m, ByteImage2D)`; rank-2 instances satisfy `isinstance(m, FloatImage2D)`; both satisfy `isinstance(m, FLPTIRImage)`
+- `TYPE_TO_SHAPE[MeasurementType.FLPTIRImage]` is now `DataShape.FLOAT_IMAGE_2D` (was `BYTE_IMAGE_2D`), matching the current rank-2 layout. As with `FLPTIRImageStack`, it is only a default: each instance's `data_shape` reflects its actual storage, so legacy rank-3 images report `BYTE_IMAGE_2D`
+
+### Fixed
+- `FLPTIRImage` now reads the canonical rank-2 `float32` layout that current PTIR Studio versions write, and the older rank-2 `uint16`/`uint8` layouts. Previously these files were typed as byte images and `bytes_per_pixel` raised `IndexError`. `data_float32` returns `(H, W)` float32 for every layout, and `pixel_format` on rank-2 images resolves the camera format as the SDK does (the stored `PixelFormat` for `float32` samples, else `Gray32Float`; `Gray16`/`Gray8` for `uint16`/`uint8` samples); unsupported layouts raise `InvalidMeasurementError`
+- Non-UTF-8 bytes in a string attribute no longer abort metadata loading; they decode as U+FFFD. This covers both fixed-length strings and variable-length strings, which h5py returns surrogate-escaped and which would otherwise fail when printed or encoded
+- `write_image_stack_result` no longer copies the source's noise-frame link (`NoiseFrameID`, `NoiseFrameCorrectionAppliedAtWrite`, `NoiseFrameCorrectionDisplayEnabled`) onto the derived stack. Inheriting it made PTIR Studio add the source noise frame onto derived values when display correction was off
+- Tree `NODES` rows naming a GUID with no `/TREE` group, or with a group that has no `TYPE` attribute (as an interrupted attach or detach can leave), and folder cycles are skipped instead of raising `KeyError` / `RecursionError` (spec §14.5)
+
 ## [0.1.1] - 2026-06-12
 
 ### Added
