@@ -33,6 +33,15 @@ if TYPE_CHECKING:
     from ptir5.metadata import MetadataView
 
 
+def _resolve_pixel_format(metadata: MetadataView) -> PixelFormat | str:
+    """Map the ``PixelFormat`` attribute to the enum, keeping unknown names as strings."""
+    raw: Any = metadata.get("PixelFormat", "")
+    try:
+        return PixelFormat[raw]
+    except KeyError:
+        return str(raw)
+
+
 class Measurement:
     """Base class for all PTIR5 measurements."""
 
@@ -168,11 +177,7 @@ class ByteImage2D(Measurement):
 
     @property
     def pixel_format(self) -> PixelFormat | str:
-        raw: Any = self._metadata.get("PixelFormat", "")
-        try:
-            return PixelFormat[raw]
-        except KeyError:
-            return str(raw)
+        return _resolve_pixel_format(self._metadata)
 
     @property
     def image_width_um(self) -> float:
@@ -268,11 +273,7 @@ class ImageStack3D(Measurement):
 
     @property
     def pixel_format(self) -> PixelFormat | str:
-        raw: Any = self._metadata.get("PixelFormat", "")
-        try:
-            return PixelFormat[raw]
-        except KeyError:
-            return str(raw)
+        return _resolve_pixel_format(self._metadata)
 
     @property
     def image_width_um(self) -> float:
@@ -327,10 +328,9 @@ class OPTIRImage(FloatImage2D): ...
 class GeneratedImage(FloatImage2D): ...
 class PTSRSImage(FloatImage2D): ...
 
-# Byte images (ByteImage2D)
+# Byte images (ByteImage2D); FLPTIRImage is dual-format, see below
 class CameraImage(ByteImage2D): ...
 class FluorescenceImage(ByteImage2D): ...
-class FLPTIRImage(ByteImage2D): ...
 
 # Hyperspectral cubes (HyperspectralCube)
 class OPTIRHyperspectra(HyperspectralCube): ...
@@ -357,12 +357,72 @@ def _reinterpret_legacy_flptir_bytes(
     """
     if raw.dtype != np.uint8 or raw.ndim < 1 or raw.shape[-1] != 4:
         raise InvalidMeasurementError(
-            f"FLPTIRImageStack legacy DATA must be uint8 with trailing dim 4; "
+            f"FL-PTIR legacy DATA must be uint8 with trailing dim 4; "
             f"got shape {raw.shape} dtype {raw.dtype} at {hdf5_path}"
         )
     return (
         np.ascontiguousarray(raw).view(np.float32).reshape(raw.shape[:-1])
     )
+
+
+# Rank-2 FLPTIRImage dtypes the SDK accepts: Gray32Float, Gray16 and Gray8.
+_FLPTIR_IMAGE_RANK2_DTYPES = frozenset({np.dtype(np.float32), np.dtype(np.uint16),
+                                        np.dtype(np.uint8)})
+
+
+class FLPTIRImage:
+    """Marker mixin for single widefield FL-PTIR images.
+
+    FLPTIRImage has two on-disk formats (matching the C# PSC.PTIR5.SDK):
+
+    - **Rank-2 format**: ``(height, width)`` float32 (``Gray32Float``), uint16
+      (``Gray16``) or uint8 (``Gray8``); the dataset dtype decides. Current
+      writers emit this layout. Represented by :class:`_Rank2FLPTIRImage`,
+      which also inherits from :class:`FloatImage2D`.
+    - **Legacy rank-3 byte format**: ``(height, width, 4)`` uint8 where each
+      4-byte pixel is the byte representation of a float32 value. Represented
+      by :class:`_LegacyFLPTIRImage`, which also inherits from
+      :class:`ByteImage2D`.
+
+    Regardless of the format, :attr:`data_float32` returns ``(height, width)``
+    float32 imagery. The raw on-disk dataset stays available via ``data``.
+    """
+
+    is_legacy: bool
+    _metadata: MetadataView
+
+    @property
+    def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
+        """The image as ``(height, width)`` float32."""
+        raise NotImplementedError
+
+    @property
+    def pixel_format(self) -> PixelFormat | str:
+        return _resolve_pixel_format(self._metadata)
+
+
+class _LegacyFLPTIRImage(FLPTIRImage, ByteImage2D):
+    """Legacy rank-3 uint8 FLPTIRImage. ``data`` returns raw bytes;
+    ``data_float32`` returns canonical float32 imagery."""
+
+    is_legacy = True
+
+    @property
+    def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
+        raw = self._reader.read_dataset(f"{self._hdf5_path}/DATA")
+        return _reinterpret_legacy_flptir_bytes(raw, self._hdf5_path)
+
+
+class _Rank2FLPTIRImage(FLPTIRImage, FloatImage2D):
+    """Rank-2 FLPTIRImage. ``data`` returns the stored float32, uint16 or
+    uint8 pixels; ``data_float32`` converts them to float32."""
+
+    is_legacy = False
+
+    @property
+    def data_float32(self) -> np.ndarray[Any, np.dtype[np.float32]]:
+        raw = self._reader.read_dataset(f"{self._hdf5_path}/DATA")
+        return raw.astype(np.float32, copy=False)
 
 
 class FLPTIRImageStack:
@@ -476,13 +536,13 @@ _TYPE_TO_CLASS: dict[str, type[Measurement]] = {
     "PTSRSImage": PTSRSImage,
     "CameraImage": CameraImage,
     "FluorescenceImage": FluorescenceImage,
-    "FLPTIRImage": FLPTIRImage,
+    # FLPTIRImage and FLPTIRImageStack are rank-dispatched in build_measurement,
+    # not via this table, because their concrete class depends on the on-disk
+    # dataset shape.
     "OPTIRHyperspectra": OPTIRHyperspectra,
     "RamanHyperspectra": RamanHyperspectra,
     "OPTIRImageStack": OPTIRImageStack,
     "CameraImageStack": CameraImageStack,
-    # FLPTIRImageStack is rank-dispatched in build_measurement, not via this
-    # table, because its concrete class depends on the on-disk dataset shape.
     "PTSRSImageStack": PTSRSImageStack,
     "TimeDomainBurst": TimeDomainBurst,
     "TimeDomainCube": TimeDomainCube,
@@ -505,6 +565,33 @@ def _infer_shape(ndim: int, dtype: np.dtype[Any]) -> DataShape | None:
     return None
 
 
+def _flptir_image_class(
+    reader: HDF5Reader, hdf5_path: str
+) -> tuple[type[Measurement], DataShape]:
+    """Pick the FLPTIRImage class from the dataset rank and dtype.
+
+    Matches the C# SDK's ``FLPTIRImage.Open``: rank 3 is the legacy float-bytes
+    layout (validated when read); rank 2 must be float32, uint16 or uint8.
+    """
+    data_path = f"{hdf5_path}/DATA"
+    if not reader.has_dataset(data_path):
+        raise InvalidMeasurementError(f"FLPTIRImage is missing DATA dataset at {hdf5_path}")
+    ds_rank = len(reader.dataset_shape(data_path))
+    if ds_rank == 3:
+        return _LegacyFLPTIRImage, DataShape.BYTE_IMAGE_2D
+    if ds_rank == 2:
+        ds_dtype = reader.dataset_dtype(data_path)
+        if ds_dtype not in _FLPTIR_IMAGE_RANK2_DTYPES:
+            raise InvalidMeasurementError(
+                f"FLPTIRImage rank-2 DATA must be float32, uint16 or uint8; got dtype "
+                f"{ds_dtype} at {hdf5_path}"
+            )
+        return _Rank2FLPTIRImage, DataShape.FLOAT_IMAGE_2D
+    raise InvalidMeasurementError(
+        f"FLPTIRImage DATA must be rank 2 or 3; found rank {ds_rank} at {hdf5_path}"
+    )
+
+
 def build_measurement(
     reader: HDF5Reader,
     hdf5_path: str,
@@ -516,7 +603,10 @@ def build_measurement(
 
     # Determine class and shape
     cls: type[Measurement]
-    if type_str == "FLPTIRImageStack":
+    if type_str == "FLPTIRImage":
+        mt = MeasurementType.FLPTIRImage
+        cls, shape = _flptir_image_class(reader, hdf5_path)
+    elif type_str == "FLPTIRImageStack":
         # FLPTIRImageStack has two on-disk formats — pick the concrete class
         # and matching DataShape from the actual dataset rank/dtype, and
         # reject anything that doesn't match one of the two valid layouts.

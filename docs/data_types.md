@@ -15,12 +15,13 @@ on-disk storage format.
 
 ### FloatImage2D
 - **Array**: `(height, width)` of `float32`
-- **Use**: Single-wavenumber images (O-PTIR, Generated, PTSRS)
+- **Use**: Single-wavenumber images (O-PTIR, Generated, PTSRS) and rank-2 FL-PTIR
+  images (which may store `uint16`/`uint8` pixels; see below)
 - **Properties**: `pixel_width`, `pixel_height`, `image_width_um`, `image_height_um`
 
 ### ByteImage2D
 - **Array**: `(height, width, bytes_per_pixel)` of `uint8`
-- **Use**: Camera and fluorescence images
+- **Use**: Camera and fluorescence images, and legacy FL-PTIR images
 - **Properties**: `pixel_width`, `pixel_height`, `bytes_per_pixel`, `pixel_format`
 
 ### FloatHypercube3D
@@ -72,7 +73,7 @@ on-disk storage format.
 | `PTSRSImage` | FloatImage2D | `ptir5.PTSRSImage` |
 | `CameraImage` | ByteImage2D | `ptir5.CameraImage` |
 | `FluorescenceImage` | ByteImage2D | `ptir5.FluorescenceImage` |
-| `FLPTIRImage` | ByteImage2D | `ptir5.FLPTIRImage` |
+| `FLPTIRImage` | FloatImage2D _or_ ByteImage2D ([see below](#flptirimage--dual-format)) | `ptir5.FLPTIRImage` |
 | `OPTIRHyperspectra` | HyperspectralCube | `ptir5.OPTIRHyperspectra` |
 | `RamanHyperspectra` | HyperspectralCube | `ptir5.RamanHyperspectra` |
 | `TimeDomainCube` | HyperspectralCube | `ptir5.TimeDomainCube` |
@@ -80,6 +81,22 @@ on-disk storage format.
 | `PTSRSImageStack` | FloatHypercube3D | `ptir5.PTSRSImageStack` |
 | `CameraImageStack` | ByteImageStack3D | `ptir5.CameraImageStack` |
 | `FLPTIRImageStack` | ByteImageStack3D _or_ FloatImageStack3D ([see below](#flptirimagestack--dual-format)) | `ptir5.FLPTIRImageStack` |
+
+## FLPTIRImage — dual format
+
+Single FL-PTIR images also have two supported on-disk layouts. Both produce
+`(height, width)` `float32` imagery through `data_float32`:
+
+| Storage format | DATA shape | DATA dtype | Concrete base | `is_legacy` |
+|----------------|------------|------------|---------------|-------------|
+| Rank-2 (current) | `(H, W)` | `float32` (`Gray32Float`), `uint16` (`Gray16`) or `uint8` (`Gray8`) | `FloatImage2D` | `False` |
+| Legacy rank-3  | `(H, W, 4)` | `uint8` (each 4-byte pixel encodes one `float32`) | `ByteImage2D` | `True` |
+
+As in the C# SDK, the dataset dtype decides the rank-2 pixel format.
+`pixel_format` reports the stored `PixelFormat` attribute. `data` returns the
+unmodified on-disk dataset. Any other rank or rank-2 dtype raises
+`InvalidMeasurementError` when the file's measurements are loaded; a legacy
+rank-3 dataset whose trailing dimension is not 4 raises when it is read.
 
 ## FLPTIRImageStack — dual format
 

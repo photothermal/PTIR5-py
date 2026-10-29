@@ -154,6 +154,23 @@ Inherits from `ImageStack3D`. Float image stack `(images, height, width)` of
 |----------|------|-------------|
 | `read_image(index)` | `np.ndarray` | Image at stack index, shape `(height, width)` `float32` |
 
+## FLPTIRImage
+
+Marker mixin for single widefield FL-PTIR images. Instances are one of two
+concrete classes chosen by storage format:
+
+- Rank-2 `(H, W)` storage (`float32`, `uint16` or `uint8`) → also
+  `FloatImage2D`. Current writers emit this layout.
+- Legacy rank-3 `(H, W, 4) uint8` storage → also `ByteImage2D`. Each 4-byte
+  pixel encodes one `float32` value.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `is_legacy` | `bool` | `True` for rank-3 byte storage, `False` for rank-2 |
+| `data_float32` | `np.ndarray` | Image as `(height, width)` `float32` for either format |
+| `pixel_format` | `PixelFormat \| str` | Stored `PixelFormat` attribute |
+| `data` | `np.ndarray` | Unmodified on-disk dataset |
+
 ## FLPTIRImageStack
 
 Marker mixin for widefield FL-PTIR image stacks. `FLPTIRImageStack` itself is

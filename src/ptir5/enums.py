@@ -82,7 +82,10 @@ TYPE_TO_SHAPE: dict[MeasurementType, DataShape] = {
     MeasurementType.PTSRSImage: DataShape.FLOAT_IMAGE_2D,
     MeasurementType.CameraImage: DataShape.BYTE_IMAGE_2D,
     MeasurementType.FluorescenceImage: DataShape.BYTE_IMAGE_2D,
-    MeasurementType.FLPTIRImage: DataShape.BYTE_IMAGE_2D,
+    # FLPTIRImage stores either rank-2 (H, W) pixels (current format) or
+    # rank-3 (H, W, 4) uint8 float bytes (legacy). The concrete DataShape is
+    # chosen at build time from the dataset's actual rank.
+    MeasurementType.FLPTIRImage: DataShape.FLOAT_IMAGE_2D,
     MeasurementType.OPTIRHyperspectra: DataShape.FLOAT_HYPERCUBE_3D,
     MeasurementType.RamanHyperspectra: DataShape.FLOAT_HYPERCUBE_3D,
     MeasurementType.OPTIRImageStack: DataShape.FLOAT_HYPERCUBE_3D,
