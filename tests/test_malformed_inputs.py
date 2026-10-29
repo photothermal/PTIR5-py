@@ -162,6 +162,20 @@ class TestNonUtf8StringAttribute:
             assert m.label == "ok"
 
 
+    def test_variable_length_invalid_bytes_are_replaced(self, write_ptir: WritePtir) -> None:
+        # h5py decodes invalid UTF-8 in variable-length strings with surrogateescape;
+        # such a str cannot be printed or encoded, so it is normalized to U+FFFD.
+        path = write_ptir("OPTIRSpectrum", np.zeros(3, np.float32))
+        with h5py.File(path, "a") as h5:
+            h5["MEASUREMENTS/11111111-2222-3333-4444-555555555555"].attrs.create(
+                "XUnits", b"\xb5s", dtype=h5py.string_dtype("utf-8")
+            )
+        with ptir5.open(path) as f:
+            units = f.measurements[0].metadata["XUnits"]
+            assert units == "\ufffds"
+            units.encode("utf-8")
+
+
 class TestUnresolvedTreeNodes:
     LEAF = "11111111-2222-3333-4444-555555555555"     # write_ptir's measurement GUID
     MISSING = "99999999-9999-9999-9999-999999999999"

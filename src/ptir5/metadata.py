@@ -23,6 +23,14 @@ def _convert_value(val: Any) -> Any:
     Undecodable bytes become U+FFFD rather than failing the whole metadata
     load, as the C# SDK never throws on string decode.
     """
+    if isinstance(val, str):
+        try:
+            val.encode("utf-8")
+        except UnicodeEncodeError:
+            # h5py decodes invalid UTF-8 in variable-length strings with
+            # surrogateescape; such a str cannot be printed or re-encoded.
+            return val.encode("utf-8", "surrogateescape").decode("utf-8", errors="replace")
+        return val
     if isinstance(val, bytes):
         return val.decode("utf-8", errors="replace")
     if isinstance(val, np.bytes_):
