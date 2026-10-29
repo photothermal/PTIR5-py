@@ -15,6 +15,7 @@ from ptir5.exceptions import (
 from ptir5.file import PTIR5File
 from ptir5.metadata import MetadataView
 from ptir5.models import (
+    AuxiliaryDatasets,
     ByteImage2D,
     ByteImageStack3D,
     CameraImage,
@@ -79,6 +80,7 @@ __all__ = [
     "PTIR5Error",
     # Models
     "Measurement",
+    "AuxiliaryDatasets",
     "FloatSpectrum1D",
     "FloatImage2D",
     "ByteImage2D",

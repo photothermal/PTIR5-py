@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TimeDomainBurst` and `TimeDomainCube` measurement types (PSC.PTIR5.SDK time-domain capture); previously these loaded as generic `Measurement`
 - `HyperspectralCube` base class for `OPTIRHyperspectra`, `RamanHyperspectra` and `TimeDomainCube`
 - `FLPTIRImage.data_float32` and `FLPTIRImage.is_legacy` properties
+- `Measurement.auxiliary` (`AuxiliaryDatasets`) for the per-pixel and per-frame side datasets stored next to `DATA`, including `BackgroundScale`, `PumpWavelength` and `StokesWavelength`
+- `component_completion` on cubes and image stacks, decoding the opt-in `ComponentCompletion` marker (`None` when untracked; any value other than 1 reads as incomplete)
 
 ### Changed
 - `FLPTIRImage` is now a marker mixin, like `FLPTIRImageStack`. Legacy rank-3 instances still satisfy `isinstance(m, ByteImage2D)`; rank-2 instances satisfy `isinstance(m, FloatImage2D)`; both satisfy `isinstance(m, FLPTIRImage)`

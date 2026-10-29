@@ -21,6 +21,7 @@ Each base shape has concrete subclasses for each MeasurementType.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -29,6 +30,8 @@ from ptir5.enums import TYPE_TO_SHAPE, DataShape, MeasurementType, PixelFormat
 from ptir5.exceptions import InvalidMeasurementError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from ptir5._reader import HDF5Reader
     from ptir5.metadata import MetadataView
 
@@ -40,6 +43,68 @@ def _resolve_pixel_format(metadata: MetadataView) -> PixelFormat | str:
         return PixelFormat[raw]
     except KeyError:
         return str(raw)
+
+
+class AuxiliaryDatasets(Mapping[str, np.ndarray[Any, Any]]):
+    """Read-only mapping of the side datasets stored next to a measurement's DATA.
+
+    Keys are the sibling dataset names (``Wavenumber``, ``NumAverages``,
+    ``ComponentCompletion``, ...), excluding ``DATA``. The name list is read
+    once; each value is read from the file on every access and never cached.
+    """
+
+    __slots__ = ("_names", "_path", "_reader")
+
+    def __init__(self, reader: HDF5Reader, hdf5_path: str) -> None:
+        self._reader = reader
+        self._path = hdf5_path
+        self._names: tuple[str, ...] | None = None
+
+    def _ensure_names(self) -> tuple[str, ...]:
+        if self._names is None:
+            self._names = tuple(
+                name for name in self._reader.list_datasets(self._path) if name != "DATA"
+            )
+        return self._names
+
+    def __getitem__(self, key: str) -> np.ndarray[Any, Any]:
+        if key not in self._ensure_names():
+            raise KeyError(key)
+        return self._reader.read_dataset(f"{self._path}/{key}")
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._ensure_names())
+
+    def __len__(self) -> int:
+        return len(self._ensure_names())
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._ensure_names()
+
+    def __repr__(self) -> str:
+        return f"AuxiliaryDatasets({list(self._ensure_names())})"
+
+
+def _read_component_completion(
+    reader: HDF5Reader, hdf5_path: str, expected_shape: tuple[int, ...]
+) -> np.ndarray[Any, np.dtype[np.bool_]] | None:
+    """Decode the opt-in ``ComponentCompletion`` marker (spec §7.4.1).
+
+    Absent means completion is unknown (``None``). Only the value 1 reads as
+    complete; 0 and any corrupt value read as incomplete (fail closed).
+    """
+    path = f"{hdf5_path}/ComponentCompletion"
+    if not reader.has_dataset(path):
+        return None
+    dtype = reader.dataset_dtype(path)
+    shape = reader.dataset_shape(path)
+    if dtype != np.uint8 or shape != expected_shape:
+        raise InvalidMeasurementError(
+            f"ComponentCompletion must be uint8 with shape {expected_shape}; "
+            f"got shape {shape} dtype {dtype} at {hdf5_path}"
+        )
+    result: np.ndarray[Any, np.dtype[np.bool_]] = reader.read_dataset(path) == 1
+    return result
 
 
 class Measurement:
@@ -106,6 +171,11 @@ class Measurement:
     def data(self) -> np.ndarray[Any, Any]:
         """Read the DATA dataset. Not cached — assign to a variable to reuse."""
         return self._reader.read_dataset(f"{self._hdf5_path}/DATA")
+
+    @property
+    def auxiliary(self) -> AuxiliaryDatasets:
+        """Side datasets stored next to DATA (per-pixel or per-frame arrays)."""
+        return AuxiliaryDatasets(self._reader, self._hdf5_path)
 
     def __repr__(self) -> str:
         return (
@@ -236,6 +306,20 @@ class FloatHypercube3D(Measurement):
             f"{self._hdf5_path}/DATA", (index, slice(None), slice(None))
         )
 
+    @property
+    def component_completion(self) -> np.ndarray[Any, np.dtype[np.bool_]] | None:
+        """Per-component completion, or ``None`` when the file does not track it.
+
+        Cubes track one flag per pixel ``(height, width)``; float image stacks
+        one flag per frame. ``False`` means incomplete or corrupt.
+        """
+        return _read_component_completion(
+            self._reader, self._hdf5_path, self._completion_shape()
+        )
+
+    def _completion_shape(self) -> tuple[int, ...]:
+        return (self.pixel_height, self.pixel_width)
+
 
 class HyperspectralCube(FloatHypercube3D):
     """A cube holding one spectrum (or time-domain waveform) per X/Y pixel.
@@ -262,6 +346,14 @@ class ImageStack3D(Measurement):
     @property
     def num_images(self) -> int:
         return self._reader.dataset_shape(f"{self._hdf5_path}/DATA")[0]
+
+    @property
+    def component_completion(self) -> np.ndarray[Any, np.dtype[np.bool_]] | None:
+        """Per-frame completion ``(num_images,)``, or ``None`` when untracked.
+
+        ``False`` means incomplete or corrupt.
+        """
+        return _read_component_completion(self._reader, self._hdf5_path, (self.num_images,))
 
     @property
     def pixel_height(self) -> int:
@@ -338,9 +430,16 @@ class RamanHyperspectra(HyperspectralCube): ...
 class TimeDomainCube(HyperspectralCube):
     """One time-domain waveform per X/Y pixel; the leading axis is time (µs)."""
 
-# Float image stacks stored as (images, height, width) float32 (FloatHypercube3D)
-class OPTIRImageStack(FloatHypercube3D): ...
-class PTSRSImageStack(FloatHypercube3D): ...
+# Float image stacks stored as (images, height, width) float32 (FloatHypercube3D);
+# their components are frames, so completion is tracked per frame.
+class OPTIRImageStack(FloatHypercube3D):
+    def _completion_shape(self) -> tuple[int, ...]:
+        return (self.num_points,)
+
+
+class PTSRSImageStack(FloatHypercube3D):
+    def _completion_shape(self) -> tuple[int, ...]:
+        return (self.num_points,)
 
 # Byte image stacks (ByteImageStack3D)
 class CameraImageStack(ByteImageStack3D): ...

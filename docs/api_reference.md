@@ -48,6 +48,14 @@ The main entry point for accessing PTIR5 file contents.
 | `metadata` | `MetadataView` | Dict-like attribute access |
 | `generated` | `tuple[Measurement, ...]` | Child GENERATED items |
 | `data` | `np.ndarray` | DATA dataset (read on each access) |
+| `auxiliary` | `AuxiliaryDatasets` | Side datasets next to DATA, keyed by name (each read on access) |
+
+## AuxiliaryDatasets
+
+Read-only `Mapping[str, np.ndarray]` over the sibling datasets of a
+measurement, excluding `DATA`. The name list is read once; values are read
+from the file on every access and never cached. A missing name raises
+`KeyError`; access after the file is closed raises `FileClosedError`.
 
 ## FloatSpectrum1D
 
@@ -100,6 +108,7 @@ Inherits from `Measurement`. 3D float cube `(points, height, width)`.
 | `x_values` | `np.ndarray` | Computed x-axis array |
 | `read_spectrum(x, y)` | `np.ndarray` | Spectrum at pixel (x, y) |
 | `read_image(index)` | `np.ndarray` | Image at spectral index |
+| `component_completion` | `np.ndarray[bool] \| None` | Completion per pixel `(height, width)`, or per frame for `OPTIRImageStack`/`PTSRSImageStack`; `None` when untracked |
 
 ## HyperspectralCube
 
@@ -134,6 +143,7 @@ subclass.
 | `pixel_format` | `PixelFormat \| str` | Pixel format enum |
 | `image_width_um` | `float` | Physical width in microns |
 | `image_height_um` | `float` | Physical height in microns |
+| `component_completion` | `np.ndarray[bool] \| None` | Completion per frame `(num_images,)`; `None` when untracked |
 
 ## ByteImageStack3D
 

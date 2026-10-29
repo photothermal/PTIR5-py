@@ -50,6 +50,11 @@ class HDF5Reader:
         grp = self._file()[path]
         return [k for k in grp if isinstance(grp[k], h5py.Group)]
 
+    def list_datasets(self, path: str) -> list[str]:
+        """Return names of datasets (not sub-groups) directly under *path*."""
+        grp = self._file()[path]
+        return [k for k in grp if isinstance(grp[k], h5py.Dataset)]
+
     # -- Attribute reading --------------------------------------------------
 
     def read_type(self, path: str) -> str:

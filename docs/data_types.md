@@ -125,6 +125,41 @@ Regardless of the underlying format:
 Use `is_legacy` to disambiguate the storage when it matters (e.g. for diagnostics
 or migration tooling); for normal pixel access you should not need to.
 
+## Side Datasets
+
+Per-pixel and per-frame arrays are stored as datasets next to `DATA`. Read them
+through `m.auxiliary`, a read-only mapping keyed by dataset name. Each access
+reads from the file, and nothing is cached:
+
+```python
+wavenumbers = stack.auxiliary["Wavenumber"]      # (images,) float32
+averages = cube.auxiliary["NumAverages"]         # (height, width) int32
+```
+
+Which datasets exist depends on the acquisition:
+
+| Owner | Shape | Datasets |
+|-------|-------|----------|
+| Hyperspectral and time-domain cubes | `(height, width)` | `NumAverages` (int32), `MinValue`, `MaxValue`, `TopFocus`, `BottomFocus`, `Temperature`, `Humidity`, `BaselineNoise`, `DcValue`, `BalDetVoltage`, `BalDetSum`, `ComponentCompletion` (uint8) |
+| Image stacks | `(images,)` | `NumAverages` (int32), `TopFocus`, `BottomFocus`, `Wavenumber`, `BackgroundScale`, `MinValue`, `MaxValue`, `Temperature`, `Humidity`, `DcValue`, `BalDetVoltage`, `BalDetSum`, `ComponentCompletion` (uint8) |
+| O-PTIR / PT-SRS image stacks | `(images,)` | `PumpPower`, `StokesPower` (mW) |
+| PT-SRS image stacks | `(images,)` | `PumpWavelength`, `StokesWavelength` (nm, informational) |
+
+### Component completion
+
+Acquisition software can opt in to recording which components are final: one
+flag per pixel spectrum for cubes, one per frame for stacks. The
+`component_completion` property on `FloatHypercube3D` and `ImageStack3D` decodes
+it:
+
+- `None`: the file does not track completion (normal for older files).
+- A `bool` array: `True` where the component is complete, and `False` where it
+  is incomplete. Any stored value other than 1 counts as incomplete (fail
+  closed).
+
+A completion dataset with the wrong dtype or shape raises
+`InvalidMeasurementError`.
+
 ## Common Metadata Keys
 
 ### Measurement Attributes
