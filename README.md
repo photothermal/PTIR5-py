@@ -81,7 +81,7 @@ with ptir5.open("sample.ptir") as f:
 | PTSRS Image | `PTSRSImage` | `(height, width)` | float32 |
 | Camera Image | `CameraImage` | `(height, width, bpp)` | uint8 |
 | Fluorescence Image | `FluorescenceImage` | `(height, width, bpp)` | uint8 |
-| FL-PTIR Image | `FLPTIRImage` | `(height, width)` | float32, uint16 or uint8 |
+| FL-PTIR Image | `FLPTIRImage` | `(height, width)` | float32 (uint16 or uint8 in older files) |
 | FL-PTIR Image (legacy) | `FLPTIRImage` | `(height, width, 4)` ¹ | uint8 |
 | O-PTIR Hyperspectra | `OPTIRHyperspectra` | `(points, height, width)` | float32 |
 | Raman Hyperspectra | `RamanHyperspectra` | `(points, height, width)` | float32 |

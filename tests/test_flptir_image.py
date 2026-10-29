@@ -1,9 +1,10 @@
 """FLPTIR image — dual-format (rank-2 canonical / legacy rank-3 byte) tests.
 
 Mirrors the C# PSC.PTIR5.SDK ``FLPTIRImage`` reader: current files store
-``(H, W)`` float32, uint16 or uint8 (the dtype decides the pixel format), and
-legacy Gray32Float files store ``(H, W, 4) uint8`` where each 4-byte pixel is a
-float32 value. Callers see the same float32 imagery either way.
+``(H, W)`` float32 for every camera format (``PixelFormat`` records the format),
+older files may store ``(H, W)`` uint16 or uint8, and legacy Gray32Float files
+store ``(H, W, 4) uint8`` where each 4-byte pixel is a float32 value. Callers
+see the same float32 imagery either way.
 """
 
 from __future__ import annotations
@@ -75,13 +76,19 @@ def test_malformed_legacy_bytes_raise_on_read(write_ptir: WritePtir) -> None:
 
 
 @pytest.mark.parametrize(("dtype", "stored", "expected"), [
+    # The SDK writes float32 for every camera format and records the format in
+    # PixelFormat, so a stored name that parses wins for float32 samples.
+    (np.float32, "Gray16", PixelFormat.Gray16),
+    (np.float32, "Gray8", PixelFormat.Gray8),
+    (np.float32, "Gray32Float", PixelFormat.Gray32Float),
+    (np.float32, "NotAFormat", PixelFormat.Gray32Float),
     (np.float32, None, PixelFormat.Gray32Float),
+    # Legacy integer layouts: the dtype decides, even over a stored name.
     (np.uint16, None, PixelFormat.Gray16),
     (np.uint8, None, PixelFormat.Gray8),
-    # As in the SDK, integer storage decides over a contradicting stored name.
     (np.uint16, "Gray8", PixelFormat.Gray16),
 ])
-def test_rank2_pixel_format_follows_the_dtype(
+def test_rank2_pixel_format_matches_the_sdk(
     write_ptir: WritePtir, dtype: type, stored: str | None, expected: PixelFormat
 ) -> None:
     attrs = {} if stored is None else {"PixelFormat": stored}

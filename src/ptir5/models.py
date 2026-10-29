@@ -584,10 +584,10 @@ class FLPTIRImage:
 
     FLPTIRImage has two on-disk formats (matching the C# PSC.PTIR5.SDK):
 
-    - **Rank-2 format**: ``(height, width)`` float32 (``Gray32Float``), uint16
-      (``Gray16``) or uint8 (``Gray8``); the dataset dtype decides. Current
-      writers emit this layout. Represented by :class:`_Rank2FLPTIRImage`,
-      which also inherits from :class:`FloatImage2D`.
+    - **Rank-2 format**: ``(height, width)``. Current writers store float32 for
+      every camera format and record the format in ``PixelFormat``; older
+      files may store uint16 (``Gray16``) or uint8 (``Gray8``). Represented by
+      :class:`_Rank2FLPTIRImage`, which also inherits from :class:`FloatImage2D`.
     - **Legacy rank-3 byte format**: ``(height, width, 4)`` uint8 where each
       4-byte pixel is the byte representation of a float32 value. Represented
       by :class:`_LegacyFLPTIRImage`, which also inherits from
@@ -635,15 +635,21 @@ class _Rank2FLPTIRImage(FLPTIRImage, FloatImage2D):
 
     @property
     def pixel_format(self) -> PixelFormat | str:
-        """The format the stored dtype implies: Gray32Float, Gray16 or Gray8.
+        """The camera pixel format, resolved as the C# SDK's ``FLPTIRImage.Open`` does.
 
-        As in the C# SDK, the dtype decides when ``PixelFormat`` is missing and
-        for integer storage. The dtype also wins over a stored name that
-        contradicts float32 pixels, so the result always describes ``data``.
+        The SDK writes float32 samples for every camera format and records the
+        format (e.g. ``Gray16``) in ``PixelFormat``, so for float32 storage a
+        stored name that parses wins, falling back to ``Gray32Float``. For the
+        older uint16/uint8 layouts the dtype decides (``Gray16``/``Gray8``).
         """
-        return _FLPTIR_IMAGE_RANK2_FORMATS[
+        implied = _FLPTIR_IMAGE_RANK2_FORMATS[
             self._reader.dataset_dtype(f"{self._hdf5_path}/DATA")
         ]
+        if implied is PixelFormat.Gray32Float:
+            stored = _resolve_pixel_format(self._metadata)
+            if isinstance(stored, PixelFormat):
+                return stored
+        return implied
 
 
 class FLPTIRImageStack:

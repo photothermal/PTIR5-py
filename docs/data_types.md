@@ -84,18 +84,25 @@ on-disk storage format.
 
 ## FLPTIRImage — dual format
 
-Single FL-PTIR images also have two supported on-disk layouts. Both produce
+Single FL-PTIR images have a current layout and two older ones. All produce
 `(height, width)` `float32` imagery through `data_float32`:
 
 | Storage format | DATA shape | DATA dtype | Concrete base | `is_legacy` |
 |----------------|------------|------------|---------------|-------------|
-| Rank-2 (current) | `(H, W)` | `float32` (`Gray32Float`), `uint16` (`Gray16`) or `uint8` (`Gray8`) | `FloatImage2D` | `False` |
+| Rank-2 (current) | `(H, W)` | `float32` for every camera format | `FloatImage2D` | `False` |
+| Rank-2 (older) | `(H, W)` | `uint16` (`Gray16`) or `uint8` (`Gray8`) | `FloatImage2D` | `False` |
 | Legacy rank-3  | `(H, W, 4)` | `uint8` (each 4-byte pixel encodes one `float32`) | `ByteImage2D` | `True` |
 
-As in the C# SDK, the dataset dtype decides the rank-2 pixel format.
-`pixel_format` reports it (`Gray32Float`, `Gray16` or `Gray8`) even when the
-`PixelFormat` attribute is missing or contradicts the dtype. Legacy images report
-the stored `PixelFormat` attribute. `data` returns the
+The C# SDK writes `float32` samples for every camera format and records the
+camera's format (for example `Gray16`) in the `PixelFormat` attribute.
+`pixel_format` resolves it the way the SDK does:
+
+- `float32` samples: the stored `PixelFormat` when it names a known format,
+  otherwise `Gray32Float`.
+- `uint16` / `uint8` samples: `Gray16` / `Gray8` from the dtype.
+- Legacy rank-3: the stored `PixelFormat` attribute.
+
+`data` returns the
 unmodified on-disk dataset. Any other rank or rank-2 dtype raises
 `InvalidMeasurementError` when the file's measurements are loaded; a legacy
 rank-3 dataset whose trailing dimension is not 4 raises when it is read.
