@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ptir5._version import __version__
-from ptir5.enums import DataShape, MeasurementType, PixelFormat
+from ptir5.enums import DataShape, MeasurementType, NormalizeMode, PixelFormat
 from ptir5.exceptions import (
     FileClosedError,
     InvalidMeasurementError,
@@ -32,6 +32,7 @@ from ptir5.models import (
     HyperspectralCube,
     ImageStack3D,
     Measurement,
+    NormalizeSpec,
     OPTIRHyperspectra,
     OPTIRImage,
     OPTIRImageStack,
@@ -72,6 +73,7 @@ __all__ = [
     # Enums
     "DataShape",
     "MeasurementType",
+    "NormalizeMode",
     "PixelFormat",
     # Exceptions
     "FileClosedError",
@@ -81,6 +83,7 @@ __all__ = [
     # Models
     "Measurement",
     "AuxiliaryDatasets",
+    "NormalizeSpec",
     "FloatSpectrum1D",
     "FloatImage2D",
     "ByteImage2D",

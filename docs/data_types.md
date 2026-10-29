@@ -160,6 +160,31 @@ it:
 A completion dataset with the wrong dtype or shape raises
 `InvalidMeasurementError`.
 
+## Normalization Settings
+
+PTIR Studio can display a hyperspectral cube, and each band image derived from
+it, normalized. The setting is stored in two attributes, `NormalizeMode` and
+`NormalizeWavenumber`; the second holds the reference coordinate in the cube's
+`XUnits`. **ptir5 reports the setting but never normalizes data:** `data`,
+`read_spectrum()` and `read_image()` return the stored samples.
+
+| Cube type | Supported modes |
+|-----------|-----------------|
+| `OPTIRHyperspectra`, `RamanHyperspectra` | `Off`, `Peak`, `Wavenumber` |
+| `TimeDomainCube` | `Off`, `Peak`, `Time`, `Offset` |
+
+- `cube.normalize_spec` returns a `NormalizeSpec(mode, reference)`. A missing,
+  unknown or unsupported mode reads as `Off`. Names match case-insensitively.
+- `band_image.normalize_spec` is the band image's own setting, or `None` when
+  it has none and follows its cube. An explicit `Off` differs from `None`, and
+  an unparseable mode reads as `Off`.
+- `cube.resolve_normalize_spec(band_image)` returns the effective setting, using
+  the rule from spec §13.4:
+  - If the image has its own mode, the result uses that mode and only the
+    image's own reference; the cube's reference is never used. A mode the cube
+    type does not support reads as `Off`.
+  - Otherwise the result is the cube's setting.
+
 ## Common Metadata Keys
 
 ### Measurement Attributes

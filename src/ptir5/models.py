@@ -22,11 +22,12 @@ Each base shape has concrete subclasses for each MeasurementType.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
-from ptir5.enums import TYPE_TO_SHAPE, DataShape, MeasurementType, PixelFormat
+from ptir5.enums import TYPE_TO_SHAPE, DataShape, MeasurementType, NormalizeMode, PixelFormat
 from ptir5.exceptions import InvalidMeasurementError
 
 if TYPE_CHECKING:
@@ -83,6 +84,35 @@ class AuxiliaryDatasets(Mapping[str, np.ndarray[Any, Any]]):
 
     def __repr__(self) -> str:
         return f"AuxiliaryDatasets({list(self._ensure_names())})"
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizeSpec:
+    """A normalization setting: a mode and its reference coordinate.
+
+    ``reference`` is the stored ``NormalizeWavenumber`` value in the cube's
+    ``XUnits`` (wavenumber or time), or ``None`` when absent.
+    """
+
+    mode: NormalizeMode
+    reference: float | None
+
+
+_NORMALIZE_MODES_BY_NAME = {mode.value.lower(): mode for mode in NormalizeMode}
+
+
+def _parse_normalize_mode(raw: object) -> NormalizeMode | None:
+    """Match a stored mode name case-insensitively; ``None`` if it is not one."""
+    if not isinstance(raw, str):
+        return None
+    return _NORMALIZE_MODES_BY_NAME.get(raw.lower())
+
+
+def _read_normalize_reference(metadata: MetadataView) -> float | None:
+    value: Any = metadata.get("NormalizeWavenumber")
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value)
 
 
 def _read_component_completion(
@@ -328,7 +358,36 @@ class HyperspectralCube(FloatHypercube3D):
     :class:`TimeDomainCube`, mirroring the C# SDK's ``HyperspectralArrayData``.
     Image stacks (:class:`OPTIRImageStack`, :class:`PTSRSImageStack`) share the
     ``(points, height, width)`` storage but are not hyperspectral cubes.
+
+    The normalization members report the setting PTIR Studio renders with
+    (spec §13.4); the stored samples returned by ``data`` are never normalized.
     """
+
+    supported_normalize_modes: ClassVar[frozenset[NormalizeMode]] = frozenset(
+        {NormalizeMode.Off, NormalizeMode.Peak, NormalizeMode.Wavenumber}
+    )
+
+    @property
+    def normalize_spec(self) -> NormalizeSpec:
+        """The cube's own setting; a missing, unknown or unsupported mode reads as ``Off``."""
+        mode = _parse_normalize_mode(self._metadata.get("NormalizeMode"))
+        if mode is None or mode not in self.supported_normalize_modes:
+            mode = NormalizeMode.Off
+        return NormalizeSpec(mode, _read_normalize_reference(self._metadata))
+
+    def resolve_normalize_spec(self, image: GeneratedImage | None = None) -> NormalizeSpec:
+        """The effective setting for *image* (a band image of this cube), or the cube's own.
+
+        A band image with its own mode uses that mode, read as ``Off`` when this
+        cube type does not support it, with only its own reference coordinate.
+        A band image without a mode follows the cube.
+        """
+        own = image.normalize_spec if image is not None else None
+        if own is None:
+            return self.normalize_spec
+        if own.mode not in self.supported_normalize_modes:
+            return NormalizeSpec(NormalizeMode.Off, own.reference)
+        return own
 
 
 class ImageStack3D(Measurement):
@@ -417,7 +476,24 @@ class TimeDomainBurst(FloatSpectrum1D):
 
 # Float images (FloatImage2D)
 class OPTIRImage(FloatImage2D): ...
-class GeneratedImage(FloatImage2D): ...
+
+
+class GeneratedImage(FloatImage2D):
+    @property
+    def normalize_spec(self) -> NormalizeSpec | None:
+        """This band image's own normalization setting, or ``None`` to follow its cube.
+
+        An unparseable mode reads as ``Off``, not as absent. The reference comes
+        only from the image's own ``NormalizeWavenumber``. Use
+        :meth:`HyperspectralCube.resolve_normalize_spec` for the effective setting.
+        """
+        raw = self._metadata.get("NormalizeMode")
+        if raw is None:
+            return None
+        mode = _parse_normalize_mode(raw) or NormalizeMode.Off
+        return NormalizeSpec(mode, _read_normalize_reference(self._metadata))
+
+
 class PTSRSImage(FloatImage2D): ...
 
 # Byte images (ByteImage2D); FLPTIRImage is dual-format, see below
@@ -429,6 +505,11 @@ class OPTIRHyperspectra(HyperspectralCube): ...
 class RamanHyperspectra(HyperspectralCube): ...
 class TimeDomainCube(HyperspectralCube):
     """One time-domain waveform per X/Y pixel; the leading axis is time (µs)."""
+
+    # A time axis cannot use Wavenumber; Time stays readable for files that persist it.
+    supported_normalize_modes: ClassVar[frozenset[NormalizeMode]] = frozenset(
+        {NormalizeMode.Off, NormalizeMode.Peak, NormalizeMode.Time, NormalizeMode.Offset}
+    )
 
 # Float image stacks stored as (images, height, width) float32 (FloatHypercube3D);
 # their components are frames, so completion is tracked per frame.

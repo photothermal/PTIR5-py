@@ -117,6 +117,19 @@ waveform per pixel: `OPTIRHyperspectra`, `RamanHyperspectra` and
 `TimeDomainCube`. `OPTIRImageStack` and `PTSRSImageStack` are
 `FloatHypercube3D` but not `HyperspectralCube`.
 
+| Property / Method | Type | Description |
+|----------|------|-------------|
+| `supported_normalize_modes` | `frozenset[NormalizeMode]` | Class attribute; modes this cube type renders |
+| `normalize_spec` | `NormalizeSpec` | The cube's stored setting (missing, unknown or unsupported mode reads `Off`) |
+| `resolve_normalize_spec(image=None)` | `NormalizeSpec` | Effective setting for a band image (spec §13.4), or the cube's own |
+
+`GeneratedImage.normalize_spec` (`NormalizeSpec | None`) is a band image's own
+setting; `None` means it follows its cube.
+
+`NormalizeSpec` is a frozen dataclass with fields `mode: NormalizeMode` and
+`reference: float | None`. These members report settings only; ptir5 never
+normalizes data.
+
 ## Time-domain types
 
 - `TimeDomainBurst` (`FloatSpectrum1D`): one waveform captured at a single X/Y
@@ -253,6 +266,10 @@ Attributes from sub-groups (Channel, ParticleData, ROIData, Palette) are prefixe
 `FluorescenceImage`, `FLPTIRImage`, `OPTIRHyperspectra`, `RamanHyperspectra`,
 `OPTIRImageStack`, `CameraImageStack`, `FLPTIRImageStack`, `PTSRSImageStack`,
 `TimeDomainBurst`, `TimeDomainCube`
+
+### NormalizeMode (StrEnum)
+
+`Off`, `Peak`, `Wavenumber`, `Time`, `Offset`
 
 ### DataShape (Enum)
 

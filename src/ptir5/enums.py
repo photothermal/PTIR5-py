@@ -28,6 +28,21 @@ class MeasurementType(StrEnum):
     TimeDomainCube = "TimeDomainCube"
 
 
+class NormalizeMode(StrEnum):
+    """Hyperspectral normalization modes, stored literally in ``NormalizeMode``.
+
+    ``Wavenumber`` and ``Time`` normalize against the value at a reference
+    coordinate on a spectral or time axis; ``Offset`` subtracts it (time-domain
+    cubes only). See spec §13.4.
+    """
+
+    Off = "Off"
+    Peak = "Peak"
+    Wavenumber = "Wavenumber"
+    Time = "Time"
+    Offset = "Offset"
+
+
 class DataShape(Enum):
     """Fundamental data shapes for measurement data arrays."""
 
