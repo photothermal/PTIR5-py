@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The example scripts no longer crash with `UnicodeEncodeError` when their output is redirected on Windows, where Python defaults to a legacy code page that cannot encode labels such as `cm⁻¹`. The examples are now smoke-tested by the test suite
+
 ### Removed
 - `packaging/conda-forge/` recipe scaffolding, which was still pinned to 0.1.0. The conda-forge feedstock (https://github.com/conda-forge/ptir5-feedstock) is the maintained recipe, and its bot opens version-bump PRs after each PyPI release
 

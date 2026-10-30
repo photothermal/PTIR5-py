@@ -1,6 +1,12 @@
 """Browse the document tree of a PTIR5 file."""
 
+import sys
+
 import ptir5
+
+# Labels can contain non-ASCII text (e.g. superscript units). Write UTF-8 so that
+# output redirected on Windows, which defaults to a legacy code page, still works.
+sys.stdout.reconfigure(encoding="utf-8")
 
 with ptir5.open("tests/fixtures/sample_optir_image_stack.ptir") as f:
     if f.tree is None:

@@ -1,8 +1,13 @@
 """List all measurements across multiple PTIR5 fixture files."""
 
+import sys
 from pathlib import Path
 
 import ptir5
+
+# Labels can contain non-ASCII text (e.g. superscript units). Write UTF-8 so that
+# output redirected on Windows, which defaults to a legacy code page, still works.
+sys.stdout.reconfigure(encoding="utf-8")
 
 fixtures = Path("tests/fixtures")
 for path in sorted(fixtures.glob("*.ptir")):
