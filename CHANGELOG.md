@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- `packaging/conda-forge/` recipe scaffolding, which was still pinned to 0.1.0. The conda-forge feedstock (https://github.com/conda-forge/ptir5-feedstock) is the maintained recipe, and its bot opens version-bump PRs after each PyPI release
+
 ## [0.2.0] - 2026-10-29
 
 ### Added
